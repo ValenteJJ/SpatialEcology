@@ -3,8 +3,6 @@ title: "Lab 1 - Introduction to R as a GIS"
 output:
   html_document:
     df_print: paged
-  html_notebook: default
-  pdf_document: default
 ---
 
 ```{r, results=F, warning=F, message=F}

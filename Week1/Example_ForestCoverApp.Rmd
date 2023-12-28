@@ -1,0 +1,129 @@
+---
+title: "Example - Forest cover application"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an application I have been working on with a colleague here at Auburn. Dr. Belsare is our disease ecologist who has built an individual-based model of white-tailed deer movement and dispersal to help understand how chronic wasting disease (CWD) moves through a population. The model is flexible and can be adapted for any spatial area, but it requires a forest cover layer as input. Thus, we are building an R Shiny application that identifies a county in a specific state, pulls its shapefile, overlays it with the National Land Cover Dataset (NLCD), crops the NLCD layer to the county, and converts all raster cells into forest/non-forest. This application provides a quick mechanism for any interested party to build a raster they can input into Dr. Belsare's model that is specific to their study area.
+
+First we load the necessary packages.
+```{r, results=F, warning=F, message=F}
+require(raster)
+require(sf)
+require(rgdal)
+require(terra)
+require(FedData)
+require(tidyverse)
+require(tigris)
+```
+
+
+Next we identify the U.S. state in which we are interested. and download the county shapefile for that state which is available in the tigris package based on US census data.
+```{r}
+stateName = 'AL'
+countyShape = counties(state = stateName, cb = FALSE)
+```
+
+Now we can select the name of the specific county in which we are interested. You can find the available county names using countyShape$Name.
+
+```{r}
+countyShape$NAME
+countyName = 'Lee'
+```
+Now we can crop out the specific county we want and plot its shape.
+
+```{r}
+countyOfInterest = countyShape[which(countyShape$NAME==countyName),]
+
+#Can now plot the county
+ggplot()+
+  geom_sf(data = countyOfInterest, color="black",
+        fill="white", size=0.25)
+```
+
+
+Next we need to download the NLCD data and crop it to our study area (the county we have selected). If you're not familiar with NLCD data, you can find more information here (https://www.usgs.gov/centers/eros/science/national-land-cover-database). Basically, this is a USGS land cover product generated every few years for the entire United States. It divides the country into 30 m pixels and classifies each pixel into one of 16 land cover categories. Three of these categories are various forms of forest (deciduous forest, evergreen forest, and mixed forest) and we want to reclassify them all into a single category (forest).
+
+The following code downloads the NLCD data from 2019 and crops it to the county we have specified.
+
+```{r}
+#Can choose NLCD years of 2001, 2004, 2006, 2008, 2011, 2016, or 2019
+nlcdYear = 2019
+
+#Must identify for what spatial area you want NLCD data. Options are
+#L48 (lower 48 US states),
+#AK (Alaska, 2011 and 2016 only),
+#HI (Hawaii, 2001 only), or
+#PR (Puerto Rico, 2001 only)
+landMass = 'L48'
+
+#Set the directory where you want the nlcd data stored
+directoryForStorage = getwd()
+
+#Download the nlcd data and crop to the county of interest
+croppedNLCD = get_nlcd(countyOfInterest,
+                       label=countyName,
+                       year = nlcdYear,
+                       dataset = "landcover",
+                       landmass = landMass,
+                       extraction.dir = file.path(directoryForStorage, "FedData", "extractions", "nlcd"),
+                       raster.options = c("COMPRESS=DEFLATE", "ZLEVEL=9"),
+                       force.redo = FALSE
+)
+
+```
+
+Now we can plot the cropped NLCD data underneath our county of interest.
+
+```{r}
+#Reproject the county so it is the same as the NLCD data
+countyShape = as_Spatial(countyShape)
+countyShape = spTransform(countyShape, crs(croppedNLCD))
+
+#And plot
+plot(croppedNLCD)
+plot(countyShape, add=T, lwd=5)
+```
+
+Note that the raw data classifications for the various land classification categories are as follows:
+
+11: Open Water
+12: Perrenial Ice/Snow
+21: Developed, Open Space
+22: Developed, Low Intensity
+23: Developed, Medium Intensity
+24: Developed, High Intensity
+31: Barren Land (Rock/Sand/Clay)
+41: Deciduous Forest
+42: Evergreen Forest
+43: Mixed Forest
+51: Dwarf Scrub
+52: Shrub/Scrub
+71: Grassland/Herbaceous
+72: Sedge/Herbaceous
+73: Lichens
+74: Moss
+81: Pasture/Hay
+82: Cultivated Crops
+90: Woody Wetlands
+95: Emergent Herbaceous Wetlands
+
+Thus, we want anything with a value of 41, 42, or 43 to be identified as forest, and everything else to be identified as non-forest. To do this, we create a reclassification matrix and apply that to the cropped NLCD layer.
+
+```{r}
+reclassifyValues = matrix(c(1, 39, 0,
+                            40, 49, 1,
+                            50, 100, 0), nrow=3, ncol=3, byrow=T)
+
+forestNon = classify(croppedNLCD, rcl=reclassifyValues)
+
+plot(forestNon)
+```
+
+
+
+
+# Upshot
+
+This raster can then be written to file with the writeRaster() function and imported into the CWD deer model. There are a few advantages to this code in terms of it's applications to Dr. Belsare's model. First, had we done this through ArcGIS, we would have had to create several interim layers (Alabama counties, Lee county, full NLCD data, cropped NLCD data, and a reclassified raster). Instead of having 5 files at the end, with this approach we simply have the final product. Secondly, one can change a couple of values in this script (e.g., state and county names) and press run again and have the necessary output file available for a different county. With a couple of keystrokes, we can change this for a new study area instead of having to point-and-click through the process again within Arc.
