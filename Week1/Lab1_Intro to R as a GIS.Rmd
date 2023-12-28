@@ -1,14 +1,18 @@
 ---
 title: "Lab 1 - Introduction to R as a GIS"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
 ---
 
-```{r}
-library(maps)
-library(tidyverse)
-library(usmap)
-library(raster)
-library(sp)
+```{r, results=F, warning=F, message=F}
+require(maps)
+require(tidyverse)
+require(usmap)
+require(raster)
+require(sp)
 ```
 
 # Spatial Points
