@@ -1,0 +1,200 @@
+---
+title: "Lab 1 - Introduction to R as a GIS"
+output: html_notebook
+---
+
+```{r}
+library(maps)
+library(tidyverse)
+library(usmap)
+library(raster)
+library(sp)
+```
+
+# Spatial Points
+
+First let's create 100 random x (longitude) coordinates and 100 random y (latitude) coordinates.
+```{r}
+xCoords = runif(n = 100, min = -100, max = -80)
+yCoords = runif(n = 100, min = 25, max = 45)
+
+head(cbind(xCoords, yCoords))
+```
+Now we can turn these coordinates into a spatial points file. Note that with the proj4string argument we are specifying the coordinate reference system for these points.
+```{r}
+firstPoints = SpatialPoints(coords = cbind(xCoords, yCoords), proj4string=CRS('+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0'))
+
+str(firstPoints)
+```
+And we can plot this shapefile using the plot function.
+```{r}
+plot(firstPoints, pch = 19)
+```
+
+SpatialPoints objects just contain spatial information. SpatialPointsDataFrame objects allow you to store associated attributes about those points (e.g., site, year, individual). So let's pretend that each of these points is associated with either a sampling year of 2000 or 2020.
+
+```{r}
+sampleYears = data.frame('year' = sample(c(2000, 2020), 100, replace=T))
+firstPoints = SpatialPointsDataFrame(firstPoints, data=sampleYears)
+```
+
+Now we can plot the distribution of these points again, but this time color-code them by sample year.
+```{r}
+plot(firstPoints, pch = 19, col=as.factor(firstPoints$year))
+```
+
+And just to give you a little context, let's plot the United States in the background. For this we're going to be using ggplot. Note that by running the data.frame() function on our SpatialPointsDataFrame, we convert it into a simple data frame that we can plot in ggplot.
+
+```{r}
+
+ggplot(data=map_data('usa')) + 
+  geom_polygon(fill='lightblue', aes(x=long, y=lat, group=group)) + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + 
+  ggtitle('U.S. Map') + 
+  coord_fixed(1.3)+
+  geom_point(data = data.frame(firstPoints), aes(x=xCoords, y=yCoords, color=as.factor(year)))
+
+```
+
+
+Then using the shapefile function in the raster package, we can save our SpatialPointsDataFrame which can then be opened in any GIS platform (e.g., ArcGIS).
+```{r}
+shapefile(x = firstPoints, file='firstPoints.shp', overwrite=T)
+```
+
+And boom, just like that we have created our first shapefile in R.
+
+# Spatial Polygons
+
+We can similarly create spatial polygons from scratch. Let's create a shapefile with two different polygons. To start with, we will create vertices for the two polygons.
+
+```{r}
+# define the vertices
+x1 = c(-100, -100, -102, -102, -100)
+x2 = c(-90, -90, -95, -95, -90)
+y1 = c(30, 35, 35, 30, 30)
+y2 = c(25, 35, 35, 25, 25)
+```
+
+Note that these polygons will be rectangles (4 vertices), but that we have specified 5 coordinates. The last coordinate has to be the same as the first in order to close the loop of connections.
+
+Next we will construct the two polygons individually.
+```{r}
+# assign the vertices to a `polygon` 
+poly1 <- Polygon(cbind(x1,y1))
+poly2 <- Polygon(cbind(x2,y2))
+```
+
+If I'm being honest, for reasons I don't fully understand, there is a second step here in which we have to run this Polygons() function on each polygon.
+
+```{r}
+poly1 <- Polygons(list(poly1), ID='A')
+poly2 <- Polygons(list(poly2), ID='B')
+```
+
+These can be turned into a SpatialPolygons object which we can plot.
+
+```{r}
+twoPolys = SpatialPolygons(list(poly1, poly2))
+plot(twoPolys)
+```
+
+
+And again, let's put this in context with the United States.
+
+```{r}
+ggplot(data=map_data('usa')) + 
+  geom_polygon(fill='lightblue', aes(x=long, y=lat, group=group)) + 
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) + 
+  ggtitle('U.S. Map') + 
+  coord_fixed(1.3)+
+  geom_polygon(data = twoPolys, aes(x=long, y=lat))
+```
+
+Again, if you'd like to write this to file, you can do so and thus the shapefile is saved and can be opened in any other GIS program.
+
+```{r}
+shapefile(x = twoPolys, file='twoPolys.shp', overwrite=T)
+```
+
+
+# Spatial Lines
+
+Creating spatial lines works much the same as points and polygons, so I'm not going to elaborate too much here. But for completeness, here is how you would create some spatial lines from scratch.
+
+```{r}
+# generate 100 random XY coords - we can use this to make 50 unique lines
+x_coords <- runif(n = 100, min = -100, max = -80)
+y_coords <- runif(n = 100, min = 25, max = 45)
+
+# make a unique identifier for each line
+ID <- paste0("line_",1:100)
+```
+
+```{r}
+
+#Here we are specifying that we want the first two coordinates to be the endpoints for our first line
+line_obj <- sp::Line(cbind(x_coords[1:2],y_coords[1:2]))
+
+lines_obj <- sp::Lines(list(line_obj),ID=ID[1])
+
+firstLine <- sp::SpatialLines(list(lines_obj))
+
+plot(firstLine)
+```
+
+Frankly, the code starts to get hairy if you try to make a bunch of spatial lines from scratch, and I haven't seen much use for it in my own work. Feel free to chat with me if you want to work through such code.
+
+Lastly, we'll save this as a shapefile as well.
+
+```{r}
+shapefile(x = firstLine, file='firstLine.shp', overwrite=T)
+```
+
+
+# Rasters
+
+A raster is, at its core, a matrix of values. To convert a matrix into a spatially explicit raster, we need to:
+
+1. Specify a coordinate system;
+2. Anchor the matrix in a place within that coordinate system; and
+3. Define the resolution (i.e., size or grain) of each cell/pixel to which the matrix values apply.
+
+Let's create our first raster
+
+```{r}
+firstRaster <- raster(xmn = -100,   # set minimum x coordinate
+                      xmx = -60,    # set maximum x coordinate
+                      ymn = 25,     # set minimum y coordinate
+                      ymx = 50,     # set maximum y coordinate
+                      res = c(1,1)) # resolution in c(x,y) direction
+
+firstRaster
+```
+Note that by default the raster() function has set the projection to lat/long. We have created a raster that goes from -100 to -60 in longitude (40 degrees) and from 25 to 50 in latitude (25 degrees). We also specified a resolution of 1 degree for each cell, resulting in a spatially explicit matrix with with 25 rows and 40 columns.
+
+Currently this raster is empty, but we can fill its matrix with values.
+
+```{r}
+firstRaster[] <- seq(from = 1, to = ncell(firstRaster),by = 1)
+firstRaster
+```
+Note now that added source, names, and values fields. Source is telling us that the data values are stored in our computer's memory. The names field gives a label to the values we provided (defaulted to 'layer' here), and the actual values are supplied in the values field. Let's try plotting the raster.
+
+```{r}
+plot(firstRaster)
+```
+Just to reiterate the relationship with a simple raster, we can convert this matrix back to a matrix very simply.
+
+```{r}
+as.matrix(firstRaster)
+```
+
+If you'd like to save this raster that we created, you can do so using the writeRaster() function in the raster package. I pretty much always save raster files as Geotiffs because I find them easiest to work with. That said, you can save rasters using multiple different formats. For a full list, run raster::writeFormats().
+
+```{r}
+writeRaster(firstRaster, file='firstRaster.tif', format='GTiff', overwrite=T)
+```
+
