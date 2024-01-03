@@ -11,22 +11,273 @@ Today we are going to use R to aggregate geospatial data of several different ki
 2. A zoomed-out view of the stat of Oregon with an extent rectangle for the study area; and
 3. A map legend.
 
-# Prep work
+# Zoomed-out map
 
-Let's start by loading the necessary packages for this exercise and bringing in a raw dataset of the sample points.
+Let's start by loading the necessary packages for this exercise and bringing in a raw dataset of the sample points. Note that by loading the data file onto GitHub I am able to read the file straight from the cloud. This helps make the document fully reproducible because all I need is access to the script and it automatically brings in the data for me from the internet.
 ```{r}
 require(tidyverse)
+require(sf)
+require(tigris)
+require(geodata)
+require(terra)
+require(colorspace)
+require(tidyterra)
+require(ggnewscale)
+require(cowplot)
 
-
-read.csv()
+siteData = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week2/murreletSiteData')
 ```
 
-And this chunk creates
+Let's get a first look at the spatial locations of our data. The locations were collected on a GPS unit using the NAD83 datum of the planet and the UTM zone 10 projection. So the x and y coordinates you see are UTMs.
 ```{r}
-
-
-
-ggplot(site, aes(x=easting, y=northing))+
+ggplot(siteData, aes(x=easting, y=northing))+
   geom_point()
 ```
+
+
+Now we will turn the raw data frame into a spatial sf object. by specifying which columns represent the coordinates and the datum/projection in which those coordinates are specified. This website is going to be helpful for you figuring out how to define your projection so that this function can understand it: https://spatialreference.org/.
+```{r}
+siteSf = st_as_sf(siteData, coords=c('easting', 'northing'), crs='+proj=utm +zone=10 +ellps=GRS80 +datum=NAD83 +units=m +no_defs')
+
+plot(st_geometry(siteSf))
+```
+Note that if you do not want to create a shapefile from scratch, you can read one in that you have already created using the st_read() function.
+
+We are also going to need a spatial object that shows the extent of the area encompassed by our points so that we can plot it on our zoomed out map. To do that we first extract the x and y min and max for the bounding box (bbox) of the spatial points in our study area. Next we'll add 2 km to each dimension so that the bounding box is not pressed right up against our points. Finally, we'll convert it into a spatial object that we can plot.
+```{r}
+
+#Extract x and y coordinates of the bounding box
+studyArea = st_bbox(siteSf)
+studyArea
+
+#Let's add 2000 m to each dimension
+studyArea = studyArea + c(-2000, -2000, 2000, 2000)
+studyArea
+
+#And now we convert it to a spatial sfc object
+studyArea = st_as_sfc(studyArea)
+
+plot(studyArea)
+```
+
+Next we need a boundary file for the state of Oregon where our study took place. We are going to use that for the zoomed-out map where we show the context of our study region. Fortunately, it's easy to pull state shapefiles from the tigris package.
+
+```{r}
+oregon = states() %>% 
+  filter(NAME=='Oregon')
+
+plot(st_geometry(oregon))
+
+st_crs(oregon)$proj4string
+```
+Note that the projection of the Oregon state shapefile is different than that of the GPS points we included earlier. That will have to be rectified to ensure we can plot these points in the same place. Here we are transforming the oregon object to the same coordinate system as the siteSf object.
+```{r}
+oregon = st_transform(oregon, st_crs(siteSf))
+```
+
+Now we can overlay them all in the same place and see what we've got so far. This will form the basis for our zoomed-out map. We can see the state of Oregon, and an extent rectangle showing the area in which we worked. I've also added the points themselves for good measure.
+```{r}
+plot(st_geometry(oregon))
+plot(studyArea, col='red', add=T)
+plot(st_geometry(siteSf), add=T)
+```
+# Zoomed-in map
+
+For our zoomed-in map, I'd like to add a couple of features that will help us visualize the study area. Namely, I'd like to demonstrate how mountainous the area is as well as the distribution of old forest in the region because Marbled Murrelets tend to prefer old forests. To start with, let's download some elevation data and crop it to the state of Oregon.
+
+Note I am creating a temporary file called tmp in which I have projected the Oregon state boundary into the same CRS as the elevation data. In general, it is much faster to reproject shapefiles than raster files, especially large raster files.
+```{r}
+usaElev = elevation_30s(country='USA', path=tempdir())
+
+
+oregon = st_transform(oregon, st_crs(usaElev))
+oregonElev = crop(usaElev, oregon)
+
+plot(oregonElev)
+plot(st_geometry(oregon), add=T)
+```
+When I crop the data, the function crops the raster by the extent of the shape object (the bbox), but I would rather get rid of the values outside of the state boundaries. To do that, I can mask values that are not located inside of the shapefile. This just gives NA values to anything not located within the shape.
+
+```{r}
+oregonElev = mask(oregonElev, oregon)
+plot(oregonElev)
+```
+But we aren't going to need elevation for the entire state, so let's zoom in on our study region.
+```{r}
+studyArea = st_transform(studyArea, st_crs(oregon))
+studyAreaElevation = crop(oregonElev, studyArea)
+plot(studyAreaElevation, col=sequential_hcl(13, "Terrain"))
+```
+Now I'm going to import a raster layer that shows the distribution of forests with an old-growth structural index (OGSI) of > 80, meaning that the trees in the forest have structural characteristics resembling trees > 80 years old. This file was created by the US Forest Service, and I downloaded it from a free online repository (https://lemma.forestry.oregonstate.edu/projects/nwfp). I have stored it on GitHub again, so it can be directly imported here.
+
+```{r}
+ogsi80 = rast('https://github.com/ValenteJJ/SpatialEcology/blob/main/Week2/ogsi80_utm.tif?raw=true')
+studyArea = st_transform(studyArea, st_crs(ogsi80))
+ogsi80 = crop(ogsi80, studyArea)
+ogsi80[is.na(ogsi80)] = 0
+plot(ogsi80)
+```
+The white cells show you 30 m pixels where old growth forest has been identified. One of the downsides of working with high-resolution rasters, however, is that you can end up with a TON of cells, and thus a ton of data which can slow down or crash R. It can also take a very long time to render images with lots of cells. Because this is just for visualization purposes (and not for analysis), we are going to re-aggregate this raster at a coarser resolution to make it easier on ourselves.
+
+```{r}
+ogsi80Coarse = aggregate(ogsi80, fact=5, fun="mean")
+
+plot(ogsi80Coarse)
+```
+Now we're seeing a new raster where cells have been re-aggregated to a resolution of 150 m. Cells were joined by calculating the average value of the 25 cells that were put together. I'm going to make it binary again by saying that any cell with < 50% old growth is going to be considered NOT old growth, and the others ARE old growth (again, just for display purposes).
+
+```{r}
+ogsi80Coarse[ogsi80Coarse < 0.5] = 0
+ogsi80Coarse[ogsi80Coarse >= 0.5] = 1
+
+plot(ogsi80Coarse)
+```
+Let's reclassify this raster so that instead of 0 and 1 values, we are identifying the cells as old growth or not old growth forest.
+
+
+```{r}
+tmp = data.frame('ID' = c(0, 1), 'category' = c(NA, 'Old growth'))
+tmp
+og = categories(ogsi80Coarse, value=tmp)
+
+plot(og)
+```
+
+
+
+# Make a nice map
+
+Now that we have created all of our rasters and shapefiles, we can put it together with ggplot to make a map. First, we need to make sure that all of our layers are in the same reference system. We bounced around a bit above, so let's take stock.
+```{r}
+#These are in lat/long
+crs(studyAreaElevation, proj=T)
+crs(oregon, proj=T)
+
+
+#These are in utms
+crs(siteSf, proj=T)
+crs(og, proj=T)
+st_crs(studyArea)$proj4string
+
+```
+I'm going to reproject everything to UTMs so that we can show a nice scale bar in kilometers. I am not sure we've mentioned this yet, but note that there are two different functions for transforming the crs of a vector (st_transform) and a raster (project).
+
+```{r}
+studyAreaElevation = project(studyAreaElevation, crs(siteSf, proj=T))
+oregon = st_transform(oregon, crs(siteSf, proj=T))
+```
+
+Ok, we're ready to go. Let's start simply with our zoomed-out map. Note that ggplot has a built-in geom for plotting sf objects (geom_sf). If you load the tidyterra package, there is a geom_spatraster geom available as well. We'll use both here.
+
+
+```{r}
+zoomedOut = ggplot()+
+  geom_sf(data = oregon)+
+  geom_sf(data = studyArea, fill=NA, color='red')
+
+zoomedOut
+  
+```
+Now let's just clean this up a bit.
+
+```{r}
+zoomedOut = zoomedOut +
+  theme_bw()+ #Gets rid of most of the colors
+  theme(panel.grid=element_blank(), #Removes the gridlines
+        axis.text=element_blank(), #Removes the axis text
+        axis.ticks=element_blank(), #Removes the axis tick marks
+        panel.border=element_blank()) #Removes the frame around the graph
+
+zoomedOut
+```
+Now let's make our zoomed-in map. On this one, we are going to add elevation, old growth, and sampling point data. First I'll add on the elevation layer. Note that I'm making the background blue so it sort of looks like the ocean.
+
+```{r}
+zoomedIn = ggplot()+
+  geom_spatraster(data = studyAreaElevation)+
+  scale_fill_gradient(low='white', high='black', na.value='#99CCFF', labs(fill='Elevation'))
+
+zoomedIn
+```
+When I add in the old growth forest layer, inserting a new_scale_fill() line is critical so it doesn't try to apply the previous fill declaration to the next raster.
+```{r}
+zoomedIn = zoomedIn + 
+  new_scale_fill()+
+  geom_spatraster(data=og, alpha=0.5)+
+  scale_fill_manual(values=c('Old growth' = 'green'), na.value=NA, name='Old growth', labels='')
+
+zoomedIn
+```
+Let's throw on the study area rectangle so it is clear what is being shown in the zoomed out map. Then we'll clean it up a bit.
+
+```{r}
+zoomedIn = zoomedIn+
+  new_scale_fill()+
+  theme_bw()+
+  theme(panel.grid=element_blank(),
+        axis.text.x=element_text(angle=90, vjust=0.5, size=6))
+
+zoomedIn
+  
+```
+And lets place our survey sites over top.
+
+```{r}
+zoomedIn = zoomedIn +
+  geom_sf(data = siteSf, aes(pch=treatment), color='orange')+
+  scale_shape_manual(values=c(19, 17), name='Site type')
+
+zoomedIn
+```
+Ok, we now have a zoomed-in map and a zoomed-out map. Let's piece them together using one of my favorite packages, cowplot.
+
+# Cowplotting these together
+
+Cowplot offers tons of flexibility for sticking together different elements that are otherwise cumbersome to stick together. You can find lots of vignettes here (https://wilkelab.org/cowplot/articles/index.html). Let's try something very simple and just place these side-by-side.
+
+```{r}
+plot_grid(zoomedOut, zoomedIn)
+```
+Simple enough, but I'd like to see the zoomed-in map on one side, and then the zoomed-out map on the other side stacked on top of the legend. That might make things look a bit more compact. One neat thing you can do is pull the legend out of a ggplot figure and treat it as its own element.
+
+```{r}
+legend = get_legend(zoomedIn)
+ggdraw(legend)
+```
+For my purposes, I actually think it might be nicer to have the legend oriented horizontally, so let's switch that up. Then I'm going to delete the legend from the zoomedIn object.
+
+```{r}
+legend = get_legend(zoomedIn+theme(legend.direction='horizontal'))
+ggdraw(legend)
+
+zoomedIn = zoomedIn + theme(legend.position='none')
+```
+So now I have a zoomed-in map, a zoomed-out map, and a legend. Let's first stick the zoomed-out map on top of the legend. Note that I am specifying that I want the zoomed-out map to be half the height of the legend.
+
+```{r}
+supportingFig = plot_grid(zoomedOut, ggdraw(legend), ncol=1, rel_heights = c(0.5, 1))
+
+supportingFig
+```
+And finally, I can stick the zoomed-in map next to the supportingFig.
+
+```{r}
+plot_grid(zoomedIn, supportingFig, rel_widths=c(1, 0.5))
+```
+And export it to a jpg.
+```{r}
+ggsave2('finalMap.jpg', plot=plot_grid(zoomedIn, supportingFig, rel_widths=c(1, 1)), width=5, height=4, units='in', dpi=300)
+```
+# Things I hope you have taken away from this lab
+
+1. How to convert a csv into a spatial object.
+2. How to import data from GitHub.
+3. Exposure to several valuable spatial R packages.
+4. Creating extent boxes from other spatial files.
+5. A few different approaches for plotting spatial data.
+6. Transforming vectors and rasters between CRS'.
+7. Basic tools for cropping, manipulating values, and re-scaling spatial objects.
+8. Plotting spatial objects using ggplot.
+9. A basic understanding of what Cowplot can do for you.
+
 
