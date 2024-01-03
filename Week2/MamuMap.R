@@ -1,40 +1,55 @@
 rm(list=ls())
 
-library(magick)
-library(ggnewscale)
-library(tigris)
-library(raster)
-library(tidyverse)
-library(ggsn)
-library(cowplot)
+require(tidyverse)
+
+# library(magick)
+# library(ggnewscale)
+# library(tigris)
+# library(raster)
+# library(ggsn)
+# library(cowplot)
 
 
 #Data frame describing sampling sites
+#Note that these spatial coordinates have been scrambled
 
 site = structure(list(siteName = c("Cape Lookout", "Silt 1211", "Clevage", 
-                                  "Bayview Alder", "Pollard Cedar", "Canal 410", "Grass 1", "Louie II", 
-                                  "Canal Thinning", "Grass 2", "Sugar Maple", "Buckhorn", "Burnt Ridge", 
-                                  "Boulder Rubble", "Bucktooth", "Randall Salado", "Lower Louie", 
-                                  "Head East", "Bear Paw", "Green Bean", "Bullrun Head", "Alsea Rock", 
-                                  "Silt 1208", "Little Rowell", "Chetco River Fuels 1", "Chetco River Fuels 2", 
-                                  "West Coon 2", "West Coon 3"), siteNumber = c("1", "3", "6", 
-                                                                                "7", "18", "19", "23", "25", "28", "29", "30", "32", "39", "45", 
-                                                                                "47", "52", "53", "55", "56", "57", "59", "62", "63", "65", "Siskiyou", 
-                                                                                "Siskiyou", "Siskiyou", "Siskiyou"), treatment = c("Control", 
-                                                                                                                                   "Playback", "Control", "Playback", "Control", "Playback", "Playback", 
-                                                                                                                                   "Playback", "Playback", "Control", "Playback", "Control", "Control", 
-                                                                                                                                   "Playback", "Playback", "Control", "Control", "Playback", "Playback", 
-                                                                                                                                   "Control", "Control", "Playback", "Control", "Control", "Playback", 
-                                                                                                                                   "Control", "Control", "Playback"), easting = c(422549, 416755, 
-                                                                                                                                                                                  415810, 419751, 436684, 424842, 425110, 437687, 427288, 426457, 
-                                                                                                                                                                                  423047, 428363, 441927, 442337, 431877, 436807, 435770, 449862, 
-                                                                                                                                                                                  438203, 434352, 439578, 440900, 443051, 452532, 403925, 403722, 
-                                                                                                                                                                                  413041, 412289), northing = c(5021137, 4930836, 4880251, 4923762, 
-                                                                                                                                                                                                                5008731, 4909944, 4900603, 4998453, 4910527, 4900605, 4864021, 
-                                                                                                                                                                                                                4898909, 5006527, 5012220, 4904570, 4932619, 4911155, 5018587, 
-                                                                                                                                                                                                                4910724, 4896705, 4925386, 4910599, 4933250, 4982813, 4660983, 
-                                                                                                                                                                                                                4657202, 4666519, 4665587)), class = c("tbl_df", "tbl", "data.frame"
-                                                                                                                                                                                                                ), row.names = c(NA, -28L)) %>% mutate(years = ifelse(siteNumber %in% c('Siskiyou', '65'), '2016', '2016-2017'))
+                                   "Bayview Alder", "Pollard Cedar", "Canal 410", "Grass 1", "Louie II", 
+                                   "Canal Thinning", "Grass 2", "Sugar Maple", "Buckhorn", "Burnt Ridge", 
+                                   "Boulder Rubble", "Bucktooth", "Randall Salado", "Lower Louie", 
+                                   "Head East", "Bear Paw", "Green Bean", "Bullrun Head", "Alsea Rock", 
+                                   "Silt 1208", "Little Rowell", "Chetco River Fuels 1", "Chetco River Fuels 2", 
+                                   "West Coon 2", "West Coon 3"), siteNumber = c("1", "3", "6", 
+                                                                                 "7", "18", "19", "23", "25", "28", "29", "30", "32", "39", "45", 
+                                                                                 "47", "52", "53", "55", "56", "57", "59", "62", "63", "65", "Siskiyou", 
+                                                                                 "Siskiyou", "Siskiyou", "Siskiyou"), treatment = c("Control", 
+                                                                                                                                    "Playback", "Control", "Playback", "Control", "Playback", "Playback", 
+                                                                                                                                    "Playback", "Playback", "Control", "Playback", "Control", "Control", 
+                                                                                                                                    "Playback", "Playback", "Control", "Control", "Playback", "Playback", 
+                                                                                                                                    "Control", "Control", "Playback", "Control", "Control", "Playback", 
+                                                                                                                                    "Control", "Control", "Playback"), easting = c(432832.094730028, 
+                                                                                                                                                                                   418115.720031948, 415045.717133916, 422996.845463809, 437434.850794475, 
+                                                                                                                                                                                   427604.446991021, 437318.154119813, 444411.137426232, 423676.420184241, 
+                                                                                                                                                                                   429380.237619636, 434608.458657063, 432766.591718771, 438918.010079882, 
+                                                                                                                                                                                   446342.183291745, 428056.514411487, 433444.147901581, 420611.419428126, 
+                                                                                                                                                                                   449950.821891855, 436983.202828278, 422239.54353071, 435796.942389038, 
+                                                                                                                                                                                   439404.308231313, 448844.512318245, 446921.617130307, 404754.102837172, 
+                                                                                                                                                                                   405361.528921928, 410647.703971672, 411891.224434398), northing = c(5012946.61540473, 
+                                                                                                                                                                                                                                                       4933331.02920451, 4878337.72790159, 4920276.35430747, 5012578.03785296, 
+                                                                                                                                                                                                                                                       4916201.35192073, 4900525.34245659, 5005930.36128331, 4910145.46863717, 
+                                                                                                                                                                                                                                                       4891840.74593422, 4869958.59026877, 4890755.02478202, 5002951.19074926, 
+                                                                                                                                                                                                                                                       5014454.66775462, 4900006.49822889, 4934123.66562888, 4913301.83465668, 
+                                                                                                                                                                                                                                                       5017580.73294999, 4911308.0174465, 4900505.69301483, 4922625.64641396, 
+                                                                                                                                                                                                                                                       4920142.92881462, 4921604.9472022, 4983662.70898978, 4661323.38461782, 
+                                                                                                                                                                                                                                                       4655660.6277987, 4673389.82714476, 4661105.12335679), years = c("2016-2017", 
+                                                                                                                                                                                                                                                                                                                       "2016-2017", "2016-2017", "2016-2017", "2016-2017", "2016-2017", 
+                                                                                                                                                                                                                                                                                                                       "2016-2017", "2016-2017", "2016-2017", "2016-2017", "2016-2017", 
+                                                                                                                                                                                                                                                                                                                       "2016-2017", "2016-2017", "2016-2017", "2016-2017", "2016-2017", 
+                                                                                                                                                                                                                                                                                                                       "2016-2017", "2016-2017", "2016-2017", "2016-2017", "2016-2017", 
+                                                                                                                                                                                                                                                                                                                       "2016-2017", "2016-2017", "2016", "2016", "2016", "2016", "2016"
+                                                                                                                                                                                                                                                       )), row.names = c(NA, -28L), class = c("tbl_df", "tbl", "data.frame"
+                                                                                                                                                                                                                                                       ))
+
 
 
 ggplot(site, aes(x=easting, y=northing))+

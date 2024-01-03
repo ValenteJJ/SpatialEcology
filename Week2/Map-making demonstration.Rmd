@@ -1,0 +1,32 @@
+---
+title: "Publishable, reproducible map of sample sites"
+output: html_notebook
+---
+
+# Background
+
+Today we are going to use R to aggregate geospatial data of several different kinds and make a publishable and reproducible map. The demonstration map has been adapted from one that I made for a publication a few years ago (https://academic.oup.com/auk/article/138/2/ukaa086/6167858). In this project, we examined the effects of sound broadcast treatments on settlement decisions of endangered Marbled Murrelets. Note that because the species is endangered, I have scrambled the coordinates of our study sites (i.e., they're not the real sites we used). The map we are producing is going to have 3 elements:
+
+1. A zoomed-in view of our study area;
+2. A zoomed-out view of the stat of Oregon with an extent rectangle for the study area; and
+3. A map legend.
+
+# Prep work
+
+Let's start by loading the necessary packages for this exercise and bringing in a raw dataset of the sample points.
+```{r}
+require(tidyverse)
+
+
+read.csv()
+```
+
+And this chunk creates
+```{r}
+
+
+
+ggplot(site, aes(x=easting, y=northing))+
+  geom_point()
+```
+
