@@ -129,7 +129,7 @@ plot(toy_big)
 #nlcd
 #------------------#
 
-nlcd<-rast("nlcd2011SE")
+nlcd<-rast("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Fletcher_Fortin-2018-Supporting_Files/data/nlcd2011SE")
 
 #inspect
 proj4string(nlcd)   #from sp
