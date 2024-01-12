@@ -187,9 +187,9 @@ To quantify forest cover, we are going to be relying on the 2011 National Land C
 
 ```{r}
 
-tmp = st_read(url('https://github.com/ValenteJJ/SpatialEcology/blob/main/Week3'), layer='reptiledata')
 
-tmp = st_read(dsn='https://github.com/ValenteJJ/SpatialEcology/blob/main/Week3', layer='reptiledata.shp?raw=true')
+sites = st_read("/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week3/reptiledata.shp")
+
 
 # #------------------#
 # #nlcd
