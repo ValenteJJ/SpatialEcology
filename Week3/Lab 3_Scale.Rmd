@@ -13,6 +13,7 @@ Let's load the required packages. Make sure you install those that you don't alr
 
 setwd("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week3")
 
+require(FedData)
 library(tidyverse)
 library(terra)
 library(sf)
@@ -185,6 +186,10 @@ Reptiles were sampled with drift-fences at 85 sites across the southeastern Unit
 To quantify forest cover, we are going to be relying on the 2011 National Land Cover Database (NLCD). NLCD is built from Landsat data and divides the entire USA into into one of 20 classification categories at a 30 m pixel resolution or grain. First let's import an NLCD raster layer that has been clipped to the Southeast.
 
 ```{r}
+
+tmp = st_read(url('https://github.com/ValenteJJ/SpatialEcology/blob/main/Week3'), layer='reptiledata')
+
+tmp = st_read(dsn='https://github.com/ValenteJJ/SpatialEcology/blob/main/Week3', layer='reptiledata.shp?raw=true')
 
 # #------------------#
 # #nlcd
