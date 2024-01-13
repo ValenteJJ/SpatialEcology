@@ -1,0 +1,43 @@
+---
+title: "Lab 3 Assignment - Scale"
+output: html_notebook
+---
+
+
+# Challenge 1.
+
+Build a raster with 100 rows and 100 columns. Fill the raster cells with values with random variables drawn from a distribution of your choosing (Poisson, Normal, Uniform, etc.). Calculate the mean and variance of the values in that raster. Now increase the grain size of those cells by factors of 2, 5, and 10, combining cell values using a mean function. At each iteration, calculate the mean and variance of the values in the resulting raster. Generate 2 scatterplots that have grain size on the x-axis. Plot the mean raster value on the y-axis of the first, and variance on the y-axis of the second. What do you notice about how these values change as you "scale up" the grain size? Why do you think this pattern occurs?
+
+Place your code in the code chunk below so I can reproduce your analyses/figures.
+
+```{r}
+
+```
+
+Answer Challenge 1 with your written text here.
+
+
+# Challenge 2.
+
+Identify a situation in which you might use a summary function other than the mean to calculate new cell values when you scale up the grain of a raster (e.g., median, mode, minimum, maximum, etc.). Repeat the effort from Challenge 1 using this alternate function. Again, create two scatterplots showing how the mean and variance values of the raster change as you scale up the cell size by factors of 2, 5, and 10. Do you see a similar pattern? Compare and contrast your findings with those from Challenge 1.
+
+Place your code in the code chunk below so I can reproduce your analyses/figures.
+
+```{r}
+
+```
+
+Answer Challenge 2 with your written text here.
+
+# Challenge 3 - Five-lined skinks
+
+Recall that before we calculated forest cover, we cropped our NLCD raster to minimize its size and the computing effort necessary from our poor little computers. How might that affect our ability to evaluate the scale at which five-lined skinks respond to forest cover? Why?
+
+# Challenge 4.
+
+We measured forest Measure forest cover at 1 km and 5 km and e
+
+
+
+# Scale up then extract
+
