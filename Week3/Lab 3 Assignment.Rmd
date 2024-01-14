@@ -4,9 +4,9 @@ output: html_notebook
 ---
 
 
-# Challenge 1.
+## Challenge 1 (4 points)
 
-Build a raster with 100 rows and 100 columns. Fill the raster cells with values with random variables drawn from a distribution of your choosing (Poisson, Normal, Uniform, etc.). Calculate the mean and variance of the values in that raster. Now increase the grain size of those cells by factors of 2, 5, and 10, combining cell values using a mean function. At each iteration, calculate the mean and variance of the values in the resulting raster. Generate 2 scatterplots that have grain size on the x-axis. Plot the mean raster value on the y-axis of the first, and variance on the y-axis of the second. What do you notice about how these values change as you "scale up" the grain size? Why do you think this pattern occurs?
+**Build a raster with 100 rows and 100 columns. Fill the raster cells with values of a random variable drawn from a distribution of your choosing (Poisson, Normal, Uniform, etc.). Calculate the mean and variance of the values in that raster. Now increase the grain size of those cells by factors of 2, 5, and 10, combining cell values using a mean function. At each iteration, calculate the mean and variance of the values in the resulting raster. Generate 2 scatterplots that have grain size on the x-axis. Plot the mean raster value on the y-axis of the first, and variance on the y-axis of the second. What do you notice about how these values change as you "scale up" the grain size? Why do you think this pattern occurs?**
 
 Place your code in the code chunk below so I can reproduce your analyses/figures.
 
@@ -17,9 +17,11 @@ Place your code in the code chunk below so I can reproduce your analyses/figures
 Answer Challenge 1 with your written text here.
 
 
-# Challenge 2.
+## Challenge 2 (4 points)
 
-Identify a situation in which you might use a summary function other than the mean to calculate new cell values when you scale up the grain of a raster (e.g., median, mode, minimum, maximum, etc.). Repeat the effort from Challenge 1 using this alternate function. Again, create two scatterplots showing how the mean and variance values of the raster change as you scale up the cell size by factors of 2, 5, and 10. Do you see a similar pattern? Compare and contrast your findings with those from Challenge 1.
+**Identify a situation in which you might use a summary function other than the mean to calculate new cell values when you scale up the grain of a raster (e.g., median, mode, minimum, maximum, etc.). Repeat the effort from Challenge 1 using this alternate function. Again, create two scatterplots showing how the mean and variance values of the raster change as you scale up the cell size by factors of 2, 5, and 10. Do you see a similar pattern? Compare and contrast your findings with those from Challenge 1.**
+
+*Hint: You should be able to recycle your code from Challenge 1 with only a couple of small tweaks to answer this question.*
 
 Place your code in the code chunk below so I can reproduce your analyses/figures.
 
@@ -29,15 +31,36 @@ Place your code in the code chunk below so I can reproduce your analyses/figures
 
 Answer Challenge 2 with your written text here.
 
-# Challenge 3 - Five-lined skinks
+## Challenge 3 (2 points)
 
-Recall that before we calculated forest cover, we cropped our NLCD raster to minimize its size and the computing effort necessary from our poor little computers. How might that affect our ability to evaluate the scale at which five-lined skinks respond to forest cover? Why?
+**Recall that before we calculated forest cover, we cropped our NLCD raster to minimize its size and the computing effort necessary from our poor little computers. How might that affect our ability to evaluate the scale at which five-lined skinks respond to forest cover? Why?**
 
-# Challenge 4.
+Place your answers here.
 
-We measured forest Measure forest cover at 1 km and 5 km and e
+## Challenge 4 (4 points)
 
+**In the lab, we measured forest cover at 1 km and 5 km. Extract forest cover proportions around each sample point for 100 m, 500 m, 1 km, 2 km, 3 km, 4 km, and 5 km scales. Examine the correlation between these 7 variables (remember the chart.Correlation() function). What patterns do you notice in correlation among these variables?**
 
+*Hint: Recall the for loop we used to calculate this variable at two scales... could you make a small addition here to look at more scales?*
 
-# Scale up then extract
+```{r}
+
+```
+
+## Challenge 5 (4 points)
+
+**Fit 8 logistic regression models (a null model and one for each of the 7 forest scales). Compare these models using AICc. Which scale do you think represents the critical or characteristic scale at which forest cover affects skink presence? Is this scale clearly better than the others, or is there some ambiguity? What are some mechanisms by which forest cover could affect skink presence at this scale? What is your overall conclusion regarding how forest cover affects skink presence (i.e., take a look at the betas)?**
+
+Place your R code in the chunk below.
+```{r}
+
+```
+
+Place your answer to the questions here.
+
+## Challenge 6 (2 points)
+
+**If you encounter ambiguity in identifying the characteristic scale of an effect, can you come up with a clever way to condense the information in the multi-scale variables into just one or two? When might it be ok to include two covariates in the same model (think multiple regression) that represent the same ecological feature measured at different scales (e.g., forest cover at 1 km AND forest cover at 5 km in the same model)? I can think of both a biological and a statistical answer to this question.**
+
+Place your answer to the questions here.
 

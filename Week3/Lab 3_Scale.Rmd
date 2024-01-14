@@ -18,6 +18,8 @@ Let's load the required packages. Make sure you install those that you don't alr
 
 setwd("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week3")
 
+require(PerformanceAnalytics)
+require(AICcmodavg)
 require(tigris)
 require(FedData)
 library(tidyverse)
@@ -175,7 +177,7 @@ matrix(simpRastExt, nrow=8)
 
 # Multiscale responses to land cover
 
-Our goal in this next exercise is going to be to identify the scale at which a species responds to a habitat characteristic. We are going to be working with a case study species, the five-lined skink and examining the effects of forest cover on its presence/absence at multiple spatial scales. This example was borrowed and tweaked from Fletcher & Fortin (2018).
+Our goal in this next exercise is going to be to compare a species' response to a habitat characteristic at multiple scales. We are going to be working with a case study species, the five-lined skink and examining the effects of forest cover on its presence/absence. This example was borrowed and tweaked from Fletcher & Fortin (2018).
 
 Reptiles were sampled with drift-fences at 85 sites across the southeastern United States (See Figure 2 in https://onlinelibrary.wiley.com/doi/full/10.1111/gcbb.12453). Sampling occurred in mature longleaf pine savannas, slash/loblolly pine plantations, and corn fields in three geographic regions in the southeastern Coastal Plains (Alabama, Georgia, and Florida). We're going to remove the corn sites for this exercise. Two drift fences were used at each site and sampled for 3 days each month in April through July of 2013-2015.
 
@@ -198,6 +200,16 @@ ggplot()+
   geom_sf(data = states)+
   geom_sf(data = sites)
 ```
+Note that one of the neat things about sf objects is that even though they are spatial "shapefiles", we can treat them just like dataframes. Here we are importing a presence/absence dataset associated with these sites and joining it with the sf object "sites."
+
+```{r}
+presAbs = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week3/reptiles_flsk.csv')
+
+sites = sites %>% 
+  left_join(presAbs, by='site')
+```
+
+
 
 Next we need to download the NLCD data relevant to our study area of interest. But remember, we are talking about a 30 m resolution raster that covers the entire United States. It's a BIG file, so anything we can do to constrain the size of that file will be useful. Thus, we're going to take the bounding box of our study area, add 10 km to each side, and then use that new shape to crop the NLCD data to something specific for our needs.
 
@@ -351,156 +363,54 @@ for(i in 1:nrow(sites)){
   for1km[i] = bufferCover(sites, 1000, forest)
   for5km[i] = bufferCover(sites, 5000, forest)
 }
-cbind(for1km, for5km)
+
+forestData = sites %>% 
+  mutate(for1km = unlist(for1km),
+         for5km = unlist(for5km))
+
+head(forestData)
 ```
 
-*What is the maximum radius you could evaluate? Why?*
-
-Ok, so there we have it. We know know what proportion of the area around each point is comprised of forest at two scales. Let's package this into a neat li
+Ok, so there we have it. We now know what proportion of the area around each point is comprised of forest at two scales. What is the relationship between these two variables?
 ```{r}
 
+forestData %>% 
+  as.data.frame() %>% 
+  select(coords_x1, for1km, for5km) %>% 
+  chart.Correlation(histogram=F)
+
+```
+It looks like they are moderately, positively correlated with one another, but they are certainly not the same variable. Our next question then might be "which one of these scales is right for examining five-lined skink responses to forest cover?" Let's let the data tell us what they think. In theory, forest cover should have the most explanatory power on skink presence if we match the scale at which the skink is evaluating forest cover. So, we're going to fit two logistic regression models and compare them to one another. 
+
+```{r}
+
+modelNull = glm(pres~1, family='binomial', data=forestData)
+model1km = glm(pres~for1km, family='binomial', data=forestData)
+model5km = glm(pres~for5km, family='binomial', data=forestData)
+
+aictab(list(modelNull, model1km, model5km), modnames=c('Null', '1 km', '5 km'))
+
+```
+
+Both models that include forest as a covariate have substantially more support than the null model. But the model that contains the 5 km variable has substantially greater support, implying that 5 km is closer to the characteristic scale at which forest cover influences skink presence. We can also compare the effect size for these covariates.
+
+```{r}
+effects = data.frame(model = c('1km', '5km'),
+           beta = c(summary(model1km)$coefficients[2,1], summary(model5km)$coefficients[2,1]),
+           se = c(summary(model1km)$coefficients[2,2], summary(model5km)$coefficients[2,2]))
+
+effects = effects %>% 
+  mutate(lcl = beta - 1.96*se,
+         ucl = beta + 1.96*se)
+
+ggplot(effects, aes(x=model))+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  geom_point(aes(y=beta))+
+  geom_errorbar(aes(ymin=lcl, ymax=ucl))
+
+
 ```
 
 
-# 
-# #make a data frame
-# forest.scale <- data.frame(site=sites$site,
-#                          x=sites$coords_x1, y=sites$coords_x2,
-#                          f1km=f1km, f2km=f2km)
-# 
-# #plot
-# plot(f1km, f2km)
-# 
-# #aggregate forest landcover to grain reflected in sampling
-# forest200 <- aggregate(forest, fact=7, fun=modal)
-# 
-# #inspect
-# res(forest200) #210x210 res
-# 
-# ####################################
-# #2.3.4.2 Scale of effect
-# ####################################
-# 
-# #----------------------------------------#
-# #2.3.4.2 Buffer analysis
-# #----------------------------------------#
-# 
-# #herp data
-# flsk <- read.csv("reptiles_flsk.csv", header=T)
-# flsk <- merge(flsk, forest.scale, by="site", all=F)
-# 
-# #glms at 2 scales; see text for more scales considered
-# pres.1km <- glm(pres ~ f1km, family = "binomial", data = flsk)
-# pres.2km <- glm(pres ~ f2km, family = "binomial", data = flsk)
-# 
-# #summary information
-# summary(pres.1km)
-# summary(pres.2km)
-# 
-# #likelihoods
-# logLik(pres.1km)
-# logLik(pres.2km)
-# 
-# #accessing coefficients
-# pres.1km.ci <- confint(pres.1km)
-# pres.2km.ci <- confint(pres.2km)
-# pres.2km.ci
-# 
-# #----------------------------------------#
-# #2.3.4.2 Kernel analysis
-# #----------------------------------------#
-# 
-# #recreate simple logistic regression from scratch
-# nll <- function(par, cov, y) {
-#   alpha <- par[1]
-#   beta  <- par[2]
-#   lp <- alpha + beta*cov
-#   p <- plogis(lp)
-#   loglike <- -sum(y*log(p) + (1-y)*log(1-p))#nll
-#   return(loglike)
-# }
-# 
-# #fit simple logistic regression model with optim
-# lr.buffer <- optim(par=c(0, 0), fn=nll, method='L-BFGS-B',
-#                   cov=flsk$f2km, y=flsk$pres, hessian=T)
-# lr.buffer$par
-# lr.buffer.vc <- solve(lr.buffer$hessian)  #var-cov matrix
-# lr.buffer.se <- sqrt(diag(lr.buffer.vc))  #standard errors
-# lr.buffer.se
-# 
-# #check against glm function
-# summary(pres.2km)$coefficients
-# 
-# #logistic regression with spatial kernel
-# nll.kernel <- function(par, D, cov, y) {
-#   sig <-   exp(par[1])                       #ensures sigma is non-negative
-#   alpha <- par[2]
-#   beta <-  par[3]
-#   cov.w <- apply(D, 1, function(x) {
-#     w0 <- exp(-x^2 / (2*sig^2))              #gaussian kernel
-#     w0[w0==1] <- 0                           #for truncated data: D > max leads to w0=1
-#     w <- w0/sum(w0)                          #w kernel weights; make so weights sum to 1
-#     sum(cov * w)                             #weighted average of the raster values
-#   })
-#   lp <- alpha + beta*cov.w                   #linear predictor
-#   p <-  plogis(lp)                           #back-transform to probability
-#   loglike <- -sum(y*log(p) + (1-y)*log(1-p)) #nll for logistic
-#   return(loglike)
-# }
-# 
-# #raster to data frame
-# forest200.df <- data.frame(rasterToPoints(forest200))
-# 
-# #inspect
-# names(forest200.df)
-# 
-# #dist matrix
-# D <- rdist(as.matrix(flsk[,c("x","y")]),
-#            as.matrix(forest200.df[,c("x","y")]))
-# 
-# #reduce size of D
-# D <- D/1000                                                         #in km
-# D[D > 10] <- 0                                                      #truncate to only consider max dist (10km)
-# D <- Matrix(D, sparse = TRUE)                                       #convert ot sparse matrix format
-# cov.subset <- which(colSums(D)!=0, arr.ind = T)                     #identify columns with all zeros->locations that are not within 10km of any site
-# D <- D[, cov.subset]                                                #remove columns with all zeros
-# 
-# #fit kernel logistic regression with optim:
-# lr.kernel <- optim(fn=nll.kernel, hessian=T, method='L-BFGS-B',
-#                    D=D, par=c(0,-6,8),                              #use starting values based on lr.buffer, adjusted for proportion rather than % cover
-#                    cov=forest200.df$layer[cov.subset], y=flsk$pres)
-# 
-# #parameters
-# lr.kernel$par
-# 
-# #model negative log-likelihoods
-# lr.buffer$value
-# lr.kernel$value
-# 
-# #AIC
-# AICkernel <- 2*lr.kernel$value + 2*length(lr.kernel$par)
-# AICbuffer <- 2*lr.buffer$value + 2*length(lr.buffer$par)
-# c(AICkernel, AICbuffer)
-# 
-# #to plot kernel fitted in lr.kernel
-# sig.fit <- exp(lr.kernel$par[1])
-# dist.kernel <- seq(1,10, by=0.2)
-# gaus.kernel <- exp(-dist.kernel^2/(2*sig.fit^2))
-# plot(dist.kernel, gaus.kernel)
-# 
-# #to compare covariates:
-# cov.fit.w <- apply(D, 1, function(x) {
-#   w0 <- exp(-x^2 / (2*sig.fit^2))          #gaussian kernel
-#   w0[w0==1] <- 0                           #for truncated data: D > max leads to w0=1
-#   w <- w0/sum(w0)                          #w kernel weights; make so weights sum to 1
-#   sum(forest200.df$layer[cov.subset] * w)  #weighted average of the raster values
-# })
-# 
-# #plot
-# plot(flsk$f2km/100, cov.fit.w)
-# 
-# #correlation
-# cor(flsk$f2km/100, cov.fit.w)
-
-```
 
