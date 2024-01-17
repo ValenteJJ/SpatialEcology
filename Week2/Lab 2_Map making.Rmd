@@ -35,9 +35,9 @@ ggplot(siteData, aes(x=easting, y=northing))+
 ```
 
 
-Now we will turn the raw data frame into a spatial sf object. by specifying which columns represent the coordinates and the datum/projection in which those coordinates are specified. This website is going to be helpful for you figuring out how to define your projection so that this function can understand it: https://spatialreference.org/.
+Now we will turn the raw data frame into a spatial sf object by specifying which columns represent the coordinates and the datum/projection in which those coordinates are specified. This website is going to be helpful for you figuring out how to define your projection so that this function can understand it: https://spatialreference.org/.
 ```{r}
-siteSf = st_as_sf(siteData, coords=c('easting', 'northing'), crs='+proj=utm +zone=10 +ellps=GRS80 +datum=NAD83 +units=m +no_defs')
+siteSf = st_as_sf(siteData, coords=c('easting', 'northing'), crs='+proj=utm +zone=10 +datum=NAD83 +units=m +no_defs +type=crs')
 
 plot(st_geometry(siteSf))
 ```
@@ -70,7 +70,7 @@ plot(st_geometry(oregon))
 
 st_crs(oregon)$proj4string
 ```
-Note that the projection of the Oregon state shapefile is different than that of the GPS points we included earlier. That will have to be rectified to ensure we can plot these points in the same place. Here we are transforming the oregon object to the same coordinate system as the siteSf object.
+Note that the projection of the Oregon state shapefile is different than that of the GPS points we included earlier. That will have to be rectified to ensure we can plot these points in the same place. Here we are transforming the Oregon object to the same coordinate system as the siteSf object.
 ```{r}
 oregon = st_transform(oregon, st_crs(siteSf))
 ```
@@ -85,7 +85,7 @@ plot(st_geometry(siteSf), add=T)
 
 For our zoomed-in map, I'd like to add a couple of features that will help us visualize the study area. Namely, I'd like to demonstrate how mountainous the area is as well as the distribution of old forest in the region because Marbled Murrelets tend to prefer old forests. To start with, let's download some elevation data and crop it to the state of Oregon.
 
-Note I am creating a temporary file called tmp in which I have projected the Oregon state boundary into the same CRS as the elevation data. In general, it is much faster to reproject shapefiles than raster files, especially large raster files.
+Note I am projecting the Oregon state boundary into the same CRS as the elevation data. In general, it is much faster to reproject shapefiles than raster files, especially large raster files.
 ```{r}
 usaElev = elevation_30s(country='USA', path=tempdir())
 
@@ -111,7 +111,8 @@ plot(studyAreaElevation, col=sequential_hcl(13, "Terrain"))
 Now I'm going to import a raster layer that shows the distribution of forests with an old-growth structural index (OGSI) of > 80, meaning that the trees in the forest have structural characteristics resembling trees > 80 years old. This file was created by the US Forest Service, and I downloaded it from a free online repository (https://lemma.forestry.oregonstate.edu/projects/nwfp). I have stored it on GitHub again, so it can be directly imported here.
 
 ```{r}
-ogsi80 = rast('https://github.com/ValenteJJ/SpatialEcology/blob/main/Week2/ogsi80_utm.tif?raw=true')
+# ogsi80 = rast('https://github.com/ValenteJJ/SpatialEcology/blob/main/Week2/ogsi80_utm.tif?raw=true')
+ogsi80 = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week2/ogsi80_utm.tif')
 studyArea = st_transform(studyArea, st_crs(ogsi80))
 ogsi80 = crop(ogsi80, studyArea)
 ogsi80[is.na(ogsi80)] = 0
