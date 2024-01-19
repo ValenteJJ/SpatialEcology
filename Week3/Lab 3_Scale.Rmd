@@ -18,13 +18,13 @@ Let's load the required packages. Make sure you install those that you don't alr
 
 setwd("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week3")
 
-require(PerformanceAnalytics)
+require(sf)
 require(AICcmodavg)
 require(tigris)
 require(FedData)
-library(tidyverse)
-library(terra)
-library(sf)
+require(tidyverse)
+require(terra)
+
 ```
 
 # Experimenting with grain and extent
@@ -45,7 +45,7 @@ set.seed(23)
 simpRast[] = rpois(ncell(simpRast), lambda=3)
 
 #plot
-plot(simpRast, axes=F, box=F)
+plot(simpRast)
 text(simpRast, digits=2)
 ```
 Now we can see that we have a 6-by-6 matrix each containing a random positive integer. Because I set the seed, you should be seeing a matrix that is identical to mine. Note the raster starts filling in values from the top left to the bottom right. To visualize this, we can create a second raster and fill it in with the values 1-36.
@@ -155,7 +155,10 @@ simpRastCrop <- crop(simpRast, e)
 #plot
 plot(simpRast)
 plot(e, add=T)
+text(simpRast, digits=1, cex=0.6)
+
 plot(simpRastCrop)
+text(simpRastCrop, digits=1, cex=1)
 ```
 Increasing the extent of the raster is similarly easy.
 
@@ -166,7 +169,10 @@ simpRastExt <- extend(simpRast,e)
 
 #plot
 plot(simpRast)
+text(simpRast, digits=1, cex=1)
+
 plot(simpRastExt)
+text(simpRastExt, digits=1, cex=1)
 ```
 
 Note that the new raster simply has NA values in all of the cells that we added, which could be filled in with our own values if we wanted to do that.
@@ -237,7 +243,8 @@ nlcd = get_nlcd(studyArea,
                 landmass = 'L48'
 )
 
-plot(nlcd)
+
+plot(nlcd, 1, legend=T)
 plot(st_geometry(sites), add=T, pch=16)
 ```
 
@@ -377,7 +384,7 @@ Ok, so there we have it. We now know what proportion of the area around each poi
 forestData %>% 
   as.data.frame() %>% 
   select(coords_x1, for1km, for5km) %>% 
-  chart.Correlation(histogram=F)
+  PerformanceAnalytics::chart.Correlation(histogram=F)
 
 ```
 It looks like they are moderately, positively correlated with one another, but they are certainly not the same variable. Our next question then might be "which one of these scales is right for examining five-lined skink responses to forest cover?" Let's let the data tell us what they think. In theory, forest cover should have the most explanatory power on skink presence if we match the scale at which the skink is evaluating forest cover. So, we're going to fit two logistic regression models and compare them to one another. 

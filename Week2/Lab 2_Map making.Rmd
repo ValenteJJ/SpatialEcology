@@ -1,6 +1,8 @@
 ---
 title: "Publishable, reproducible map of sample sites"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Background
@@ -26,6 +28,8 @@ require(ggnewscale)
 require(cowplot)
 
 siteData = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week2/murreletSiteData')
+
+
 ```
 
 Let's get a first look at the spatial locations of our data. The locations were collected on a GPS unit using the NAD83 datum of the planet and the UTM zone 10 projection. So the x and y coordinates you see are UTMs.
