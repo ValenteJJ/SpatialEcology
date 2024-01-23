@@ -8,8 +8,55 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
 ```{r}
-plot(cars)
+rm(list=ls())
+require(tidyverse)
+require(terra)
+require(FedData)
+require(sf)
+require(tidyterra)
 ```
+
+
+```{r}
+# nlcd = rast("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
+
+# basename("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
+# dirname("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
+# 
+# nlcd = rast("nlcd2011gv2sr")
+# tmp = ext(nlcd)
+# tmp = as.polygons(tmp, crs=crs(nlcd))
+# tmp = st_as_sf(tmp)
+# 
+# st_write(tmp, 'studyArea.shp')
+
+
+
+studyArea = st_read('studyArea.shp')
+nlcd = get_nlcd(studyArea, label='AlLandscape', year=2011)
+
+plot(nlcd)
+```
+
+For our purposes, we are going to simplify this raster by condensing condense some of these land cover categories.
+
+```{r}
+
+tmp = data.frame('ID' = c(11, 21, 22, 23, 24, 31, 41, 42, 43, 52, 71, 81, 82),
+                 'category' = c('wetland', rep('developed', 4), 'open', rep('forest', 3), 'open', 'grassland', rep('agriculture', 2)))
+
+tmp
+
+nlcd = categories(nlcd, value=tmp)
+
+ggplot(nlcd, aes(x=x, y=y, fill=category)) +
+  geom_raster()+
+  scale_fill_manual(values=c('blue', 'black', 'gray', 'darkolivegreen', 'orange', 'yellow'))
+
+
+```
+
+
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
