@@ -16,29 +16,16 @@ require(sf)
 require(tidyterra)
 ```
 
+I've zoomed in on one of the study areas in Alabama that we used in the previous lab. Here we are loading the boundary of that study area and downloading NLCD data relevant to that particular study area. Note that you may find the get_nlcd() function very handy in your work going forward, as it brings NLCD data straight in without you having to download the entire dataset (nationwide) to your computer.
 
 ```{r}
-# nlcd = rast("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
-
-# basename("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
-# dirname("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week4/nlcd2011gv2sr")
-# 
-# nlcd = rast("nlcd2011gv2sr")
-# tmp = ext(nlcd)
-# tmp = as.polygons(tmp, crs=crs(nlcd))
-# tmp = st_as_sf(tmp)
-# 
-# st_write(tmp, 'studyArea.shp')
-
-
-
-studyArea = st_read('studyArea.shp')
+studyArea = st_read('/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week4/studyArea.shp')
 nlcd = get_nlcd(studyArea, label='AlLandscape', year=2011)
 
 plot(nlcd)
 ```
 
-For our purposes, we are going to simplify this raster by condensing condense some of these land cover categories.
+For our purposes, we are going to simplify this raster by condensing some of these land cover categories.
 
 ```{r}
 
@@ -56,10 +43,6 @@ ggplot(nlcd, aes(x=x, y=y, fill=category)) +
 
 ```
 
+# Patch-level metrics
 
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
