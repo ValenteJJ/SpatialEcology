@@ -1,6 +1,8 @@
 ---
 title: "Lab 3 - Multi-scale analyses"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Background
@@ -39,6 +41,7 @@ plot(simpRast)
 ```
 
 Note that we don't get anything when we ask it to plot this raster because it's empty - we haven't put any values in the cells. So we're going to fill those cell values with random variables drawn from a Poisson distribution with a mean/variance of 3.
+
 ```{r}
 set.seed(23)
 
@@ -48,6 +51,7 @@ simpRast[] = rpois(ncell(simpRast), lambda=3)
 plot(simpRast)
 text(simpRast, digits=2)
 ```
+
 Now we can see that we have a 6-by-6 matrix each containing a random positive integer. Because I set the seed, you should be seeing a matrix that is identical to mine. Note the raster starts filling in values from the top left to the bottom right. To visualize this, we can create a second raster and fill it in with the values 1-36.
 
 ```{r}
@@ -87,6 +91,7 @@ text(simpRastMode)
 *Food for thought: When might you use mean vs. mode?*
 
 Let's compare some simple statistics from the original and aggregated rasters. You can calculate raster statistics using either the global() function, or by converting to a matrix and running some of the common arithmetic functions on the matrix.
+
 ```{r}
 
 #Calculate the mean and variance of the original raster using the global function
@@ -160,6 +165,7 @@ text(simpRast, digits=1, cex=0.6)
 plot(simpRastCrop)
 text(simpRastCrop, digits=1, cex=1)
 ```
+
 Increasing the extent of the raster is similarly easy.
 
 ```{r}
@@ -176,6 +182,7 @@ text(simpRastExt, digits=1, cex=1)
 ```
 
 Note that the new raster simply has NA values in all of the cells that we added, which could be filled in with our own values if we wanted to do that.
+
 ```{r}
 matrix(simpRastExt, nrow=8)
 ```
@@ -189,23 +196,26 @@ Reptiles were sampled with drift-fences at 85 sites across the southeastern Unit
 
 To quantify forest cover, we are going to be relying on the 2011 National Land Cover Database (NLCD). NLCD is built from Landsat data and divides the entire USA into into one of 20 classification categories at a 30 m pixel resolution or grain. First let's import a shapefile showing the study sites and plot it over the state boundaries to see where we're working.
 
-```{r}
+```{r, warning=F, message=F}
 
 
 sites = st_read("/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week3/reptiledata.shp") %>% 
   filter(management!='Corn')
 st_crs(sites) = "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
-
 head(sites)
+
 
 states = states() %>% 
   filter(NAME %in% c('Alabama', 'Florida', 'Georgia')) %>% 
   st_transform(crs(sites, proj=T))
 
+
+
 ggplot()+
   geom_sf(data = states)+
   geom_sf(data = sites)
 ```
+
 Note that one of the neat things about sf objects is that even though they are spatial "shapefiles", we can treat them just like dataframes. Here we are importing a presence/absence dataset associated with these sites and joining it with the sf object "sites."
 
 ```{r}
@@ -243,8 +253,7 @@ nlcd = get_nlcd(studyArea,
                 landmass = 'L48'
 )
 
-
-plot(nlcd, 1, legend=T)
+plot(nlcd, 1, legend=T, plg=list(cex=0.5))
 plot(st_geometry(sites), add=T, pch=16)
 ```
 
@@ -261,7 +270,7 @@ res(nlcd)
 ncell(nlcd)
 ```
 
-So what we have here is essentially a spatially referenced matrix with 159 million cells And each of those 159 million cells is labeled as one of 20 factors.
+So what we have here is essentially a spatially referenced matrix with 157 million cells And each of those 157 million cells is labeled as one of 20 factors.
 
 ```{r}
 
@@ -270,6 +279,7 @@ levels(nlcd)
 ```
 
 To simplify our quantification of forest cover, we are going to turn this raster into a binary forest / non-forest layer. That is, anything categorized as Deciduous Forest, Evergreen Forest, or Mixed Forest will receive a value of 1, and everything else will receive a value of 0.
+
 ```{r}
 
 forest = nlcd %>% 
@@ -304,6 +314,7 @@ plot(st_geometry(buffSite5km), border='black', lwd=5, add=T)
 plot(st_geometry(buffSite1km), border='black', lwd=3, add=T)
 plot(st_geometry(sites[1,]), pch=16, cex=2, color='black', add=T)
 ```
+
 Now we want to quantify the amount of forest within each buffered area. There are a few ways to skin this cat, but the easiest is to first crop and mask the forest layer...
 
 ```{r}
@@ -317,6 +328,7 @@ plot(buffFor1km)
 numCells = global(buffFor1km, 'sum', na.rm=T)
 numCells
 ```
+
 So this tells us the number of 30-by-30 m pixels that are comprised of forest. We can multiply this by the area of a single cell to find out how many square meters and/or hectares of forest there are within 1 km
 
 ```{r}
@@ -379,6 +391,7 @@ head(forestData)
 ```
 
 Ok, so there we have it. We now know what proportion of the area around each point is comprised of forest at two scales. What is the relationship between these two variables?
+
 ```{r}
 
 forestData %>% 
@@ -387,7 +400,8 @@ forestData %>%
   PerformanceAnalytics::chart.Correlation(histogram=F)
 
 ```
-It looks like they are moderately, positively correlated with one another, but they are certainly not the same variable. Our next question then might be "which one of these scales is right for examining five-lined skink responses to forest cover?" Let's let the data tell us what they think. In theory, forest cover should have the most explanatory power on skink presence if we match the scale at which the skink is evaluating forest cover. So, we're going to fit two logistic regression models and compare them to one another. 
+
+It looks like they are moderately, positively correlated with one another, but they are certainly not the same variable. Our next question then might be "which one of these scales is right for examining five-lined skink responses to forest cover?" Let's let the data tell us what they think. In theory, forest cover should have the most explanatory power on skink presence if we match the scale at which forest cover affects skink presence. So, we're going to fit two logistic regression models and compare them to one another. 
 
 ```{r}
 
