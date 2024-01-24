@@ -18,14 +18,13 @@ Let's load the required packages. Make sure you install those that you don't alr
 
 ```{r, warning=F, error=F, message=F}
 
-setwd("C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Git/Week3")
-
+require(tidyverse)
 require(sf)
 require(AICcmodavg)
 require(tigris)
 require(FedData)
-require(tidyverse)
 require(terra)
+require(tidyterra)
 
 ```
 
@@ -126,12 +125,15 @@ text(simpRastNear, cex=0.9)
 QUICK TANGENT: For funsies, I'm going to teach you how to convert this raster to a shapefile in which all cells with the same value have been grouped into "patches." I can think of half a million uses for such a shapefile on the back end, so I thought it was worth seeing.
 
 ```{r}
+plot(simpRastNear)
 tmp1 = as.polygons(simpRastNear)
 tmp2 = st_as_sf(tmp1)
 tmp3 = st_cast(tmp2, 'MULTIPOLYGON')
 newShapefile = st_cast(tmp3, 'POLYGON')
 
-ggplot(data=newShapefile)+
+# plot(newShapefile)
+
+ggplot(newShapefile)+
   geom_sf()+
   geom_sf_text(aes(label=lyr.1))
 
