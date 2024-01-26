@@ -255,9 +255,31 @@ nlcd = get_nlcd(studyArea,
                 landmass = 'L48'
 )
 
+
+
 plot(nlcd, 1, legend=T, plg=list(cex=0.5))
 plot(st_geometry(sites), add=T, pch=16)
 ```
+
+```{r}
+#Only use this code chunk if the previous one is not working - I had to add this in because the website is down for some reason. Download the raster folder I provided (nlcd2011SE), and change the path name below in the rast() function to link to the raster locally on your computer. Everything should work from there.
+
+
+# nlcd = rast("filepathname/nlcd2011SE")
+# nlcd = crop(nlcd, studyArea)
+# 
+# 
+# tmp = data.frame('ID' = sort(unique(values(nlcd))),
+#                  'category' = c(NA, 'Open Water', rep('Developed', 4), 'Barren', 'Deciduous Forest', 'Evergreen Forest', 'Mixed Forest', 'Shrub', 'Grassland', 'Pasture', 'Cultivated Crops', 'Woody Wetlands', 'Emergent Herbaceous Wetlands'))
+# tmp
+# 
+# 
+# nlcd = categories(nlcd, value=tmp)
+# 
+# plot(nlcd, 1, legend=T, plg=list(cex=0.5))
+# plot(st_geometry(sites), add=T, pch=16)
+```
+
 
 When it's done, you will see that you can plot landcover for the whole study area. Let's explore a couple of details about this raster, namely the projection, extent, grain, and number of cells.
 
