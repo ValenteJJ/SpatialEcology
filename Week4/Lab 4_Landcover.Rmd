@@ -1,26 +1,35 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Lab 3 - Landcover patterns and change"
+output:
+  html_document:
+    df_print: paged
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
-```{r}
+```{r, warning=F, error=F, message=F}
 rm(list=ls())
+require(Voss)
 require(tidyverse)
 require(terra)
 require(FedData)
 require(sf)
 require(tidyterra)
+require(landscapemetrics)
 ```
 
-I've zoomed in on one of the study areas in Alabama that we used in the previous lab. Here we are loading the boundary of that study area and downloading NLCD data relevant to that particular study area. Note that you may find the get_nlcd() function very handy in your work going forward, as it brings NLCD data straight in without you having to download the entire dataset (nationwide) to your computer.
+# Introduction
+
+Today we're going to be talking about measuring patterns in rasters. We're focusing on landcover, but as we've discussed, there is no reason that these ideas couldn't be translated to climatic variables, water bodies, elevations, etc. We're going to be relying heavily on the landscapemetrics R package (https://r-spatialecology.github.io/landscapemetrics/index.html). If you've ever used the FRAGSTATS software, this package is meant to be a sort of replacement that covers most of the same functions available in FRAGSTATS, but does so right in R so that you can do it all (landscape analysis and subsequent statistical analyses) in a single environment. There is also a publication on this package (https://nsojournals.onlinelibrary.wiley.com/doi/epdf/10.1111/ecog.04617). 
+
+
+I've zoomed in on one of the study areas in Alabama that we used in the previous lab. Here we are loading the boundary of that study area and downloading NLCD data relevant to it. Note that you may find the get_nlcd() function very handy in your work going forward, as it brings NLCD data straight in without you having to download the entire dataset (nationwide) to your computer.
 
 ```{r}
 studyArea = st_read('/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week4/studyArea.shp')
 nlcd = get_nlcd(studyArea, label='AlLandscape', year=2011)
+
+# values(nlcd) = as.character(values(nlcd))
 
 plot(nlcd)
 ```
@@ -29,20 +38,332 @@ For our purposes, we are going to simplify this raster by condensing some of the
 
 ```{r}
 
-tmp = data.frame('ID' = c(11, 21, 22, 23, 24, 31, 41, 42, 43, 52, 71, 81, 82),
-                 'category' = c('wetland', rep('developed', 4), 'open', rep('forest', 3), 'open', 'grassland', rep('agriculture', 2)))
+nlcdSimple = nlcd
+nlcdSimple[nlcdSimple==11] = 1 #Wet areas are a 1 now
+nlcdSimple[nlcdSimple %in% c(21, 22, 23, 24)] = 2 #All developed areas are 2
+nlcdSimple[nlcdSimple %in% c(31, 52)] = 3 #Barren land and shrub/scrub are 3
+nlcdSimple[nlcdSimple %in% c(41,42,43)] = 4 #All forest types are 4
+nlcdSimple[nlcdSimple == 71] = 5 #Grassland is 5
+nlcdSimple[nlcdSimple %in% c(81,82)] = 6 #And agriculture is 6
 
-tmp
+#Give these numbers category names
+tmp = data.frame('ID' = c(1, 2, 3, 4, 5, 6),
+                 'category' = c('wetland', 'developed', 'open', 'forest', 'grassland', 'agriculture'))
+nlcdSimple = categories(nlcdSimple, value=tmp)
 
-nlcd = categories(nlcd, value=tmp)
-
-ggplot(nlcd, aes(x=x, y=y, fill=category)) +
+#And plot the new raster
+ggplot(nlcdSimple, aes(x=x, y=y, fill=category)) +
   geom_raster()+
   scale_fill_manual(values=c('blue', 'black', 'gray', 'darkolivegreen', 'orange', 'yellow'))
-
-
 ```
+As always, if we want to look at characteristics of this raster, we can do so
+
+```{r}
+res(nlcdSimple)
+ext(nlcdSimple)
+levels(nlcdSimple)
+```
+
 
 # Patch-level metrics
 
+Patch-level metrics are (as the name implies) metrics that are measured as pertain to individual patches. I have pulled the following table from Fletcher & Fortin (2018) which gives you a sense of the kinds of metrics one might want to calculate for individual patches. This is NOT specifically representative of what can be calculated with the landscapemetrics package. Indeed, there are many more metrics that can be calculated besides these.
+
+![](C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Pictures/patchMetrics.png)
+
+
+Before we can calculate patch-level metrics, we first need to define the patches. We're going to focus on forest here, so let's categorize the landscape as forest/non-forest.
+
+```{r}
+
+forest = nlcdSimple %>% 
+  setValues(NA)
+  
+forest[nlcdSimple ==4] = 1
+
+plot(forest)
+
+```
+
+### Rook or queen?
+
+One critical decision we need to make is what constitutes a patch. This brings us to the 4-neighbor or 8-neighbor decision (also referred to as rook or queen). Basically the question is whether two cells touching at the corner constitute the same patch or different patches. There is no universally correct answer here, but rather you're going to need to consider the properties of the raster and the biological question at hand to make a justifiable decision. For the purposes of our exercise, we are going to use the queen rule. The patches() function in the terra package identifies "clumps" of like cells that can be considered identical patches. All cells in a clump are given the same patch ID, and cells in different patches receive different patch ID variables.
+
+
+```{r}
+forestPatchId = patches(forest, directions=8, zeroAsNA=T, allowGaps=F)
+
+plot(forestPatchId)
+```
+
+As noted above, the package landscapemetrics has tons and tons of functions. Most of the functions have a 3-part name. The first part is "lsm" which stands for "landscape metrics." The second part tells you which level the function applies to (p for patch, c for class, or l for landscape). The last part is an abbreviation for the metric (e.g., enn for euclidean nearest neighbor distance). Let's look at how one of these functions works. We'll start with the patch-level metric patch area.
+
+
+```{r}
+patchArea = lsm_p_area(forest, directions=8)
+
+patchArea
+```
+
+Note there are 49 rows here. Each row represents a unique forest patch in this landscape and we are seeing the output of the size of each of those patches (in ha) under the "value" column. We can calculate many patch metrics this way. For example, instead of area, we could look at core area (area of the patch not touching an edge).
+
+```{r}
+patchCore = lsm_p_core(forest, directions=8)
+
+patchCore
+```
+
+Note that although we still have 49 rows (one per patch), some of the values for core area are 0, indicating all cells in that patch touch the edge. We could also look at 
+
+```{r}
+patchEnn = lsm_p_enn(forest, directions=8)
+
+patchEnn
+```
+
+This is now reporting the edge-to-edge distance between each patch and its next nearest neighbor patch in meters. We can also calculate the perimeter of each patch, again in meters.
+
+```{r}
+patchPerim = lsm_p_perim(forest, directions=8)
+
+patchPerim
+```
+
+And we can calculate shape metrics like the perimeter-area-ratio.
+
+```{r}
+patchPara = lsm_p_para(forest, directions=8)
+
+patchPara
+```
+
+# Class-level metrics
+
+Class-level metrics summarize information about the entire class within a landscape of interest. Again, this table below is not meant to be a comprehensive list of functions that are available within the landscapemetrics package, but rather to give you an idea of the kinds of metrics available.
+
+
+![](C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Pictures/classMetrics.png)
+
+
+Class-level metrics may or may not be based on our previous patch delineations. Because we were just looking at patch-based metrics, let's summarize such information at the class level.
+
+### Patch-based
+
+Here, instead of working with the forest raster, we're going to go back and use the nlcdSimple raster. This allows us to calculate class-level summaries for all classes simultaneously. Let's start by examining the mean and standard deviation of patch sizes.
+
+```{r}
+
+#The functions annoyingly summarize by class instead of category, so we have to merge the category values back in after the summary.
+
+classCats = data.frame('class' = c(1, 2, 3, 4, 5, 6),
+                 'category' = c('wetland', 'developed', 'open', 'forest', 'grassland', 'agriculture'))
+
+
+
+lsm_c_area_mn(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+
+lsm_c_area_sd(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+```
+
+Note that forest patches have the greatest mean patch size, but also the greatest standard deviation among patch sizes compared to all of the other classes in the landscape. We can similarly calculate the mean and standard deviation of the core patch sizes for all classes on the landscape.
+
+```{r}
+lsm_c_core_mn(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+
+lsm_c_core_sd(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+```
+
+*Food for thought: why are the mean and standard deviation of core patch size for wetlands both 0?*
+
+We can calculate the mean and standard deviation of nearest neighbor distance.
+
+```{r}
+lsm_c_enn_mn(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+```
+
+And we can go on and on. For example, we can quantify cohesion of patches in each class.
+
+```{r}
+lsm_c_cohesion(nlcdSimple, directions=8) %>% 
+  left_join(classCats, by='class')
+```
+
+
+### Not patch-based
+
+There are also plenty of metrics that are not related to patch delineations themselves. For example, we could simply calculate the total area of each habitat type in the landscape.
+
+```{r}
+lsm_c_ca(nlcdSimple) %>% 
+  left_join(classCats, by='class')
+```
+
+
+There are metrics that characterize the distribution of each habitat type on the landscape, including the aggregation index and the "clumpiness" index.
+
+```{r}
+lsm_c_ai(nlcdSimple) %>% 
+  left_join(classCats, by='class')
+
+
+lsm_c_clumpy(nlcdSimple) %>% 
+  left_join(classCats, by='class')
+
+```
+
+And we can aggregate information about the distribution of edges for each class type with, for example, the edge density metric which reports meters of edge per hectare of each habitat type.
+
+```{r}
+lsm_c_ed(nlcdSimple) %>% 
+  left_join(classCats, by='class')
+```
+
+# Landscape-level metrics
+
+Now we're going to look at some landscape-level metrics. For these metrics, we're generally not summarizing information at the class level, but quantifying information about the distribution of all of the different classes simultaneously. Again, here is an example (from Fletcher and Fortin 2018) of the kinds of metrics one might want to examine at the landscape level.
+
+
+![](C:/Users/jjv0016/OneDrive - Auburn University/Teaching/Spatial Ecology/Pictures/landscapeMetrics.png)
+
+Now we're calculating the mean size and standard deviation of all patches in the landscape, regardless of class type.
+
+```{r}
+lsm_l_area_mn(nlcdSimple)
+
+lsm_l_area_sd(nlcdSimple)
+```
+
+We can look at mean nearest-neighbor distance.
+
+```{r}
+lsm_l_enn_mn(nlcdSimple, directions=8)
+
+lsm_l_enn_sd(nlcdSimple, directions=8)
+```
+
+
+
+We can calculate a cohesion index for all patches simultaneously.
+
+```{r}
+lsm_l_cohesion(nlcdSimple, directions=8)
+```
+
+And we can find information about the diversity and evenness of the landcover types spread out across a landscape.
+
+```{r}
+lsm_l_shdi(nlcdSimple)
+
+lsm_l_shei(nlcdSimple)
+```
+
+# Cell-level metrics
+
+Sometimes referred to as "moving-window" analyses, cell-level metrics calculate information relevant to individual cells. Usually this type of metric calculates information about the "neighborhood" around each cell. The output then is a new map that characterizes variation in the neighborhoods around cells. These new maps can then be used to characterize additional details about the landscape, or to extract data to individual sampling points.
+
+For example, we may be interested in knowing how far each forest pixel is from the forest edge. We can use the distance() function in the terra package to create a new map. Each cell in this new map now has a value associated with it that tells you how far it is from the nearest forest edge.
+
+```{r}
+forestEdge = distance(forest, target=1)
+
+plot(forest)
+plot(forestEdge)
+```
+
+We can also calculate "focal" statistics that summarize information in the neighborhood around each pixel. Here we are going to create a new map that shows the total amount of forest within 200 m of each pixel. To do this, we first need to define a matrix of values. The focalMat() function takes a raster and creates a matrix that is designed to represent the space you want to summarize around each pixel. Here, I'm telling it that I want a matrix that can be used to summarize the amount of forest within a 200 m radius circle around the pixels.
+
+To visualize how this works, it'll be simpler to work with a 30 m radius circle.
+
+```{r}
+probMatrix = focalMat(forest, 30, type='circle', fillNA=FALSE)
+
+probMatrix
+```
+
+This function creates the best matrix it can to overlay with each cell in the raster, multiply, and output the response we are interested in. Here, all pixels within the "circle" of interest are going to be multiplied by a proportion equal to the proportion of the circle its area comprises.
+
+As I said, however, we're going to summarize at the 200 m radius scale.
+
+```{r}
+probMatrix = focalMat(forest, 200, type='circle', fillNA=FALSE)
+
+probMatrix
+```
+
+Next I'm going to fill all of the NA values in the forest raster with 0 values (otherwise it creates some annoying arithmetic issues). Then I will use the focal function to apply this probability matrix to the forest raster and calculate the proportion of the 200 m radius area around each pixel comprised of forest.
+
+```{r}
+
+
+forestWith0 = forest
+forestWith0[is.na(forestWith0)] = 0
+
+for200m = focal(forestWith0, probMatrix, fun='sum')
+
+plot(forest)
+plot(for200m)
+```
+
+Look closely at this new map. It's pretty interesting.
+
+
+
+# Simulating landscapes
+
+The last thing we're going to be doing in this lab is learning how to simulate landscapes with different properties. Simulations of this sort can be very useful for exploring behavior of the statistics we've been looking at. Typically when one is interested in simulating landscapes with different properties, there are two variables you would tweak. These are the proportion of the landscape comprised of some land cover type of interest, and the degree to which the land cover type is aggregated.
+
+Let's start by creating a completely random landscape with 30% cover of some land cover type of interest. Every cell is equally likely to be in that land cover class.
+
+```{r}
+#Landscape dimensions
+
+dimx = 128
+dimy = 128
+
+simpRand30 = rast(ncol = dimx, nrow = dimy, xmin = 0, xmax = dimx, ymin = 0, ymax = dimy)
+
+simpRand30[] = rbinom(ncell(simpRand30), prob=0.3, size=1)
+
+plot(simpRand30)
+```
+
+Let's visually compare this with a similarly sized landscape that only has 10% cover.
+
+```{r}
+simpRand10 = rast(ncol = dimx, nrow = dimy, xmin = 0, xmax = dimx, ymin = 0, ymax = dimy)
+
+simpRand10[] = rbinom(ncell(simpRand30), prob=0.1, size=1)
+
+plot(simpRand10)
+```
+
+While a useful starting point, completely random landscapes like this don't tend to resemble real life landscapes. There are several functions that allow one to build more realistic landscapes by controlling the aggregation of cells. R's NLMR package has quite a few of these, but it has been removed from CRAN at this moment because no one has been keeping it up. So for this exercise, we're going to use the Voss package. The voss2d() function uses a fractal Brownian function which leads to spatial autocorrelation in simulated values. Note that the g value controls the number of cells that will be in the ultimate matrix (2^g x 2^g pixels). The H argument is a value between 0 and 1 that controls the amount of clustering.
+
+
+```{r}
+vossModel = voss2d(g=7, H=0.5)
+vossModel = rast(vossModel$z)
+
+plot(vossModel)
+```
+
+From this raster, we can then create two different landscapes, one containing 30% cover, and one containing 10% cover.
+
+```{r}
+
+# 30% cover
+threshold30 = quantile(as.matrix(vossModel), prob=0.3)
+voss30 = ifel(vossModel > threshold30, 0, 1)
+plot(voss30)
+
+# 10% cover
+threshold10 = quantile(as.matrix(vossModel), prob=0.1)
+voss10 = ifel(vossModel > threshold10, 0, 1)
+plot(voss10)
+```
 
