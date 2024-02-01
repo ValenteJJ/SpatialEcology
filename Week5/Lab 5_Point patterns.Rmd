@@ -1,0 +1,35 @@
+---
+title: "Lab 5 - Point patterns"
+output: html_notebook
+---
+
+
+```{r}
+rm(list=ls())
+
+require(tidyverse)
+require(spatstat)
+```
+
+
+# Introduction
+
+Today we are going to be learning about point pattern analysis. We're going to be relying heavily on the spatstat R package which does everything you've ever wanted to do in terms of analyzing point patterns.
+
+#### ppp
+
+#### owin
+
+#### im
+
+
+# Prickly pear cactus
+
+We're going to be working with a prickly pear cactus (*Opuntia humifusa*) dataset collected at the Ordway-Swisher Biological Station, a NEON site in the southeastern US. It is located just east of the University of Florida. Prickly pear is commonly found in old fields with limited canopy cover. This plant is used by many insects and vertebrates for foraging and breeding, it is an agricultural crop in some parts of the world, and it is invasive in other parts.
+
+```{r}
+
+
+
+```
+
