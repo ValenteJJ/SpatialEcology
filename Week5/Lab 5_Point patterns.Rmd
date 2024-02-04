@@ -1,35 +1,315 @@
 ---
 title: "Lab 5 - Point patterns"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
 ```{r}
 rm(list=ls())
 
-require(tidyverse)
 require(spatstat)
+require(tidyverse)
+require(terra)
+
 ```
 
 
 # Introduction
 
-Today we are going to be learning about point pattern analysis. We're going to be relying heavily on the spatstat R package which does everything you've ever wanted to do in terms of analyzing point patterns.
+Today we are going to be learning about point pattern analysis. We're going to be relying heavily on the spatstat R package which does everything you've ever wanted to do in terms of analyzing point patterns. Spatstat has three basic data types:
 
-#### ppp
-
-#### owin
-
-#### im
+1. Point Patterns (ppp objects)
+2. Windows (owin objects)
+3. Pixel images (im objects)
 
 
-# Prickly pear cactus
+# Data
 
-We're going to be working with a prickly pear cactus (*Opuntia humifusa*) dataset collected at the Ordway-Swisher Biological Station, a NEON site in the southeastern US. It is located just east of the University of Florida. Prickly pear is commonly found in old fields with limited canopy cover. This plant is used by many insects and vertebrates for foraging and breeding, it is an agricultural crop in some parts of the world, and it is invasive in other parts.
+We're going to be working with a prickly pear cactus (*Opuntia humifusa*) dataset collected at the Ordway-Swisher Biological Station, a NEON site in the southeastern US. It is located just east of the University of Florida. Prickly pear is commonly found in old fields with limited canopy cover. This plant is used by many insects and vertebrates for foraging and breeding, it is an agricultural crop in some parts of the world, and it is invasive in other parts. The data were collected in a 50 m X 50 m square plot and each cactus location was mapped with a high-resolution GPS unit. For each cactus, observers also recorded the size and presence of an insect herbivore (*Chelinidea vittiger*) that specializes on *Opuntia*. This data set and example were borrowed and tweaked from an example in Fletcher & Fortin (2018).
+
+Here we are going to start by creating a owin file and a ppp file.
 
 ```{r}
+
+cactus = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/cactus.csv')
+boundary = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/cactus_boundaries.csv')
+
+pppWindow = owin(xrange = c(boundary$Xmin, boundary$Xmax), yrange = c(boundary$Ymin, boundary$Ymax))
+
+pppCactus = ppp(x=cactus$East, y=cactus$North, window = pppWindow)
+
 
 
 
 ```
 
+Now we can calculate some summary statistics.
+
+```{r}
+plot(pppCactus)
+plot(density(pppCactus, 1))
+
+summary(pppCactus)
+```
+
+We can also calculate counts of points based on quadrats overlaid on the plot, and determine whether these counts conform to CSR using a chi-square test.
+
+```{r}
+q = quadratcount(pppCactus, nx=4, ny=4)
+plot(pppCactus)
+plot(q, add=T)
+
+quadrat.test(pppCactus, nx=4, ny=4, method='Chisq')
+```
+
+So here we have our first evidence that perhaps the point pattern (at the scale of the quadrat that we defined) is not random.
+
+
+
+
+
+# Ripley's K and L
+
+#### No correction for edges
+
+First let's look at the Ripley's K analysis with no correction for edge effects
+
+```{r}
+
+#Ripley's K
+kNone = Kest(pppCactus, correction='none', rmax=20)
+plot(kNone)
+
+#Ripley's L
+lNone = Lest(pppCactus, correction='none')
+
+#Increases with radius
+plot(lNone)
+
+#Subtract r
+plot(lNone, .-r~r)
+```
+
+First, note that the standard is to calculate K for values of r out to 1/4 of the length of the shortest side in the window. Beyond this, it's been shown that statistical propertis of K become wonky.
+
+We can now compare the line based on our data (black) to the theoretical line (red dashes) generated under CSR (Poisson process). The fact that we are seeing the black lines above the red lines indicates evidence for clustering.
+
+
+#### Edge correction
+
+The "isotropic" correction uses a simple weighting scheme for the area sampled near the plot boundary
+
+
+```{r}
+lIso = Lest(pppCactus, correction = 'isotropic')
+plot(lIso, . -r~r)
+```
+
+The "translate" option uses a toroidal shift
+
+
+```{r}
+
+lTrans = Lest(pppCactus, correction='translate')
+plot(lTrans, .-r~r)
+
+```
+
+So far we've just been exploring the relationship between the true values of K/L and the expected values. But is our observed pattern statistically different from CSR?
+
+```{r}
+lCsr = envelope(pppCactus, Lest, nsim=99, rank=1, correction='translate', global=F)
+plot(lCsr, .-r~r, shade=c('hi', 'lo'), legend=F)
+```
+
+There's a lot to unpack here. The nsim argument specifies how many simulations we want to conduct. The rank argument specifies the m-th value from the simulation we want plotted (point-wise) for the envelope. The exact significance level for the test at any point in space is against an alpha of 2*nrank/(1+nsim). Interpreting the value at any individual point, however, is dangerous because we are technically conducting lots of statistical tests. The global argument asks if we want a global test of significance, which may be smarter, but global tests for these kinds of analyses are really still under development.
+
+# Pair correlation function (g function)
+
+Pretend we are more interested in estimating the distance at which spatial patterns arise. Now we want to be thinking about the pair correlation function.
+
+```{r}
+pTrans = pcf(pppCactus, correction='translate', stoyan=0.15)
+plot(pTrans)
+```
+
+```{r}
+pEnv = envelope(pppCactus, pcf, nsim=99, rank=1, correction='translate', global=F)
+plot(pEnv, shade=c('hi', 'lo'), legend=F)
+```
+
+This is telling us that we're seeing spatial aggregation roughly between 2 and 6 m.
+
+# G-function: nearest neighbors
+
+
+Lastly, we're going to look at nearest neighbor distances using the G function.
+
+```{r}
+gTrans = Gest(pppCactus, correction='rs')
+plot(gTrans, legend=F)
+```
+
+```{r}
+gEnv = envelope(pppCactus, Gest, nsim=99, rank=1, correction='rs', global=F)
+plot(gEnv, shade=c('hi', 'lo'), legend=F)
+```
+
+This suggests that nearest neighbor distances are random at small spatial scales, but closer than expected at larger scales. Taken together, we start to get a picture of the distribution of prickly pear in space. These guys are aggregated at scales of 2-13 m, according to the K/L functions. According to our pairwise correlation, this aggregation is concentrated between 2 and 6 m.  And nearest neighbor distances are similarly smaller than expected from 2-4 m as well. I'd say we have a clumped distribution.
+
+
+# Marked point pattern analysis
+
+#### Categorical mark
+
+Pretend we now want to examine the distribution of a prickly-pear herbivore (*Chelinidea vittiger*) on these plants. The problem is that we know the cactus' distribution is clumped, so of course the distribution of it's predatory insect is going to be clumped. That's sort of a boring and arguably uninteresting question. So, what we really want to know is the distribution of *C. vittiger* conditional on the underlying distribution of the cactus.
+
+Note that the "chelinidea" variable in the cactus data frame contains a count of the number of *C. vittiger* on the cactus. We are going to change that into a presence-absence variable and create a new spatstat object.
+
+
+```{r}
+tmp = cactus
+
+tmp$chelinidea = as.factor(ifelse(tmp$chelinidea > 0, 'presence', 'absence'))
+
+pppPa = ppp(tmp$East, tmp$North, window = pppWindow, marks = tmp$chelinidea)
+
+split(pppPa)
+
+plot(split(pppPa))
+
+```
+
+Let's first interpret the spatial pattern of the distribution of *C. vittiger* while ignoring the underlying distribution of the prickly-pears.
+
+```{r}
+cheliData = subset(cactus, chelinidea > 0)
+
+pppPresent = ppp(cheliData$East, cheliData$North, window = pppWindow)
+
+lPresent = envelope(pppPresent, Lest, nsim=99, rank=1, i='presence', global=F)
+
+plot(lPresent, .-r~r, legend=F)
+```
+
+On the surface, it looks like the distribution of *C. vittiger* is clumped. The problem, however, is that that red dashed line is built for a situation where the points are randomly distributed over the whole space, NOT randomly distributed with respect to the underlying resource (prickly-pear locations). So how do we find the latter? We randomly assign presence/absence values to the points to see what a random distribution of *C. vittiger* would look like conditional on the distribution of the prickley pears.  That's what the rlabel() function does.
+
+```{r}
+lMulti = envelope(pppPa, Lcross, nsim=99, rank=1, global=F, i='presence', simulate = expression(rlabel(pppPa)))
+plot(lMulti, .-r~r, legend=F)
+
+```
+
+Now we're seeing a whole different story. It actually seems like the distribution of the cactus bugs are pretty randomly distributed among the cacti that exist on the landscape.
+
+#### Continuous mark
+
+Now let's look at the size variable associated with each cactus. The question we are going to ask is whether cacti tend to be aggregated by size, or if there is perhaps an inhibition process by which larger cacti tend to be only found near smaller ones. To do this, we'll use the markcorr() function.
+
+
+```{r}
+pppArea = ppp(cactus$East, cactus$North, window = pppWindow, marks=cactus$Area)
+
+mcfArea = markcorr(pppArea)
+
+mcfEnv = envelope(pppArea, markcorr, nsim=99, correction = 'iso', global=F)
+
+plot(mcfEnv, shade=c('hi', 'lo'), legend=F)
+```
+
+If the estimated values are > 1, there is evidence for positive mark correlation (large cacti tend to be near other large cacti), and if the value is < 1, then there is negative correlation (large cacti tend to be near smaller cacti). Here, I would conclude that there is really no strong spatial pattern in cactus size across the plot.
+
+# Inhomogenous point processes and models
+
+Inhomogenous point process models allow for us to account for factors that might be causing inhomogeneity in the distribution of a point pattern. This is very similar to fitting a GLM that assumes a Poisson distribution (i.e., Poisson regression) for point data where we are modeling the intensity of points in the study area.
+
+As with any other type of regression, we can fit multiple models that contain covariates that could potentially account for the inhomogeneity. Here we'll start with 3 simple models. The first assumes a homogenous point process, the second assumes the intensity is a linear function of x and y coordinates, and the third assumes that there is a quadratic trend in the distribution.
+
+
+
+```{r}
+ppInt = ppm(pppCactus, ~1)
+ppXy = ppm(pppCactus, ~ x + y)
+ppXy2 = ppm(pppCactus, ~polynom (x, y, 2))
+```
+
+We can also look at whether the intensity varies as a function of another spatially heterogenous variable on the landscape. Here we are bringing in a raster showing the height of the other vegetation in the area. Taller vegetation could limit light availability for the prickly pears.
+
+```{r}
+vegHeight = rast('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/cactus_matrix.csv')
+
+plot(vegHeight)
+```
+
+So, does the distribution of veg height help us understand the distribution of prickley pears? To find out, we need to turn veg height into a matrix, then into an im object that can be used by the spatstat package.
+
+```{r}
+
+vegHeight = as.data.frame(vegHeight, xy=T) %>% 
+  rename('height' = 'cactus_matrix')
+vegHeight = vegHeight[order(vegHeight$x, vegHeight$y),]
+
+vegHeightMat = matrix(NA, nrow=length(unique(vegHeight$x)), ncol=length(unique(vegHeight$y)))
+
+vegHeightMat[] = vegHeight$height
+
+vegCov = im(mat = vegHeightMat, xrange=c(boundary$Xmin, boundary$Xmax), yrange=c(boundary$Ymin, boundary$Ymax))
+```
+
+Now we can fit another point process model that evaluates the effects of vegetation height on the intensity function.
+
+```{r}
+ppVeg = ppm(pppCactus, ~veg, covariates=list(veg = vegCov))
+```
+
+
+Finally, let's compare the AIC values of our 4 fitted models.
+
+```{r}
+data.frame(model = c('int', 'xy', 'xy2', 'veg'),
+           AIC = c(AIC(ppInt), AIC(ppXy), AIC(ppXy2), AIC(ppVeg)))
+```
+
+
+We've got evidence that there is some spatial heterogeneity in the underlying point intensity. The quadratic x-y model has the most support. We can then plot the heterogeneous intensity surface predicted by this model.
+
+```{r}
+plot(predict(ppXy2, type='trend'))
+plot(pppCactus, add=T)
+```
+
+
+# Simulating point processes
+
+As we discussed last week, it's often very useful to simulate your own data so that you (1) understand how the patterns are generated, and (2) know the truth you are trying to recover from fitted models. Here we are simulating 4 realizations from a homogeneous point process where the intensity is equivalent to that from the cactus data set.
+
+```{r}
+simPp = rpoispp(lambda = intensity(pppCactus), nsim=4, win=pppWindow)
+plot(simPp)
+```
+
+And we can simulate realizations from a point process in which the intensity varies similarly to that observed by our fitted xy2 model above. 
+
+```{r}
+# pp2Fun = function(x, y){
+#   exp(ppXy2$coef[1] +
+#         ppXy2$coef[2]*x +
+#         ppXy2$coef[3]*y +
+#         ppXy2$coef[4]*I(x^2) +
+#         ppXy2$coef[5]*x*y +
+#         ppXy2$coef[6]*I(y^2))
+# }
+# 
+# pp2Sim = rpoispp(pp2Fun, nsim=4, win=pppWindow)
+# 
+# pp2sim = rpoispp(predict(ppXy2), nsim=4)
+# 
+# plot(pp2Sim)
+```
+
+
+```{r}
+
+```
