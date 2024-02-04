@@ -6,7 +6,7 @@ output:
 ---
 
 
-```{r}
+```{r, warning=F, error=F, message=F}
 rm(list=ls())
 
 require(spatstat)
@@ -304,12 +304,8 @@ And we can simulate realizations from a point process in which the intensity var
 # 
 # pp2Sim = rpoispp(pp2Fun, nsim=4, win=pppWindow)
 # 
-# pp2sim = rpoispp(predict(ppXy2), nsim=4)
-# 
-# plot(pp2Sim)
+pp2Sim = rpoispp(predict(ppXy2), nsim=4)
+
+plot(pp2Sim)
 ```
 
-
-```{r}
-
-```
