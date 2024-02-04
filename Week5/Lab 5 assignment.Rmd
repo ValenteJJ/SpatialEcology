@@ -1,0 +1,53 @@
+---
+title: "Lab 5 assignment - Point pattern analysis"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+#Place your required packages here.
+```
+
+
+# Challenge 1 (3 points)
+
+Create a simulation window on a landscape stretching from 0 to 100 units in both the x and y directions. Now simulate the distribution of an organism on this landscape using a Poisson process with a lambda value of 0.01. Plot this organism's distribution. How many organisms are there on your landscape? What is the expected number of organisms that you should find on this landscape based on your simulation parameters? Why?
+
+```{r}
+#Put your code here.
+
+#Choose your favorite number and set the seed here.
+set.seed()
+```
+
+Place your answer to Challenge 1 here.
+
+# Challenge 2 (3 points)
+
+Verify that there no linear or quadratic pattern in the distribution of your organisms using fitted Poisson process models. Show the outcome of this analysis and explain your conclusion.
+
+```{r}
+#Place your code here.
+```
+
+Place your answer to Challenge 2 here.
+
+# Challenge 3 (14 points)
+
+I have simulated the distributions of 2 critters and provided their x-y coordinates. One of them is a non-territorial predator. The second is a critter that is preyed upon by the predator and exhibits a fear response to the predator's presence. Use the tools you learned in the lab to explore the distributions of these two critters. Identify which one is the predator and which is the prey, and provide code and a thorough justification supporting your conclusion.
+
+
+```{r}
+#Use this code chunk to get you started.
+
+predPreyWin = owin(xrange = c(0, 100), yrange = c(0, 100))
+
+critter1 = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/species1.csv') %>% 
+  mutate(org = 'critter1')
+
+critter2 = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/species2.csv') %>% 
+  mutate(org = 'critter2')
+```
+
+Integrate your answer with additional code chunks here.
