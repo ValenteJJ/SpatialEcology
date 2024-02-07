@@ -79,7 +79,7 @@ First let's look at the Ripley's K analysis with no correction for edge effects
 ```{r}
 
 #Ripley's K
-kNone = Kest(pppCactus, correction='none', rmax=20)
+kNone = Kest(pppCactus, correction='none')
 plot(kNone)
 
 #Ripley's L
@@ -92,7 +92,7 @@ plot(lNone)
 plot(lNone, .-r~r)
 ```
 
-First, note that the standard is to calculate K for values of r out to 1/4 of the length of the shortest side in the window. Beyond this, it's been shown that statistical propertis of K become wonky.
+First, note that the standard is to calculate K for values of r out to 1/4 of the length of the shortest side in the window. Beyond this, it's been shown that statistical properties of K become wonky.
 
 We can now compare the line based on our data (black) to the theoretical line (red dashes) generated under CSR (Poisson process). The fact that we are seeing the black lines above the red lines indicates evidence for clustering.
 
@@ -131,7 +131,7 @@ There's a lot to unpack here. The nsim argument specifies how many simulations w
 Pretend we are more interested in estimating the distance at which spatial patterns arise. Now we want to be thinking about the pair correlation function.
 
 ```{r}
-pTrans = pcf(pppCactus, correction='translate', stoyan=0.15)
+pTrans = pcf(pppCactus, correction='translate')
 plot(pTrans)
 ```
 
@@ -293,6 +293,9 @@ plot(simPp)
 And we can simulate realizations from a point process in which the intensity varies similarly to that observed by our fitted xy2 model above. 
 
 ```{r}
+
+#If you want to learn how to do this manually (which may be useful in some cases)...
+
 # pp2Fun = function(x, y){
 #   exp(ppXy2$coef[1] +
 #         ppXy2$coef[2]*x +
@@ -303,7 +306,8 @@ And we can simulate realizations from a point process in which the intensity var
 # }
 # 
 # pp2Sim = rpoispp(pp2Fun, nsim=4, win=pppWindow)
-# 
+
+
 pp2Sim = rpoispp(predict(ppXy2), nsim=4)
 
 plot(pp2Sim)
