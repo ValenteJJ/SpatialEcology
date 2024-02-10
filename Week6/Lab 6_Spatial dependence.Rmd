@@ -1,0 +1,225 @@
+---
+title: "Lab 6 - Spatial dependence"
+output: html_notebook
+---
+
+# Introduction
+
+In this lab we are going to be assessing and quantifying patterns of spatial dependence in the vegetation data associated with your prickly-pear example from last lab. Within the same 50 m X 50 m square sampling area in which prickly pear locations were marked, vegetation height were taken systematically throughout the plot at sampling points spaced 2 m apart. We will be using the data to interpret spatial dependence of the vegetation height data and then create a map of vegetation height.
+
+First let's load the packages we need today. We're going to be introducing some new ones, including pgirmess and ncf, both of which offer functionality for calculating correlograms through slightly different approaches. We also introduce the geoR and gstat packages for building variograms.
+
+```{r, warning=F, error=F, message=F}
+rm(list=ls())
+
+require(tidyverse)
+# require(sf)
+require(pgirmess)
+require(ncf)
+library(geoR)
+# library(gstat)
+# require(RandomFields)
+```
+
+#### Raw data
+
+Let's bring in and examine the raw data briefly.
+
+```{r}
+vegMatrix = read.csv("https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week5/cactus_matrix.csv")
+head(vegMatrix)
+```
+
+What we have is a matrix of values that contains 3 columns, one representing x coordinates, one representing y coordinats, and the third representing vegetation height. Vegetation height was sampled in this system in a 2-m grid pattern, so there are 676 points (26-by-26 grid). We can plot them to get an initial sense of how the values are distributed in space.
+
+```{r}
+
+ggplot(vegMatrix, aes(x=x, y=y, color=Height))+
+  geom_point()+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  scale_color_gradient(low='blue', high='red')
+```
+
+# Correlograms
+
+Recall that correlograms are going to plot the correlation between values of points based on their distance apart. We're going to use two different packages to create correlograms because they vary in the way they estimate statistical significance.
+
+#### pgirmess package for normal approximation
+
+The first thing we're going to need to do is create a matrix of distances among all of the points.
+
+```{r}
+coords = cbind(vegMatrix$x, vegMatrix$y)
+colnames(coords) = c('x', 'y')
+distMat = as.matrix(dist(coords))
+```
+
+Generally we limit our assessment of spatial dependence to about 1/2 to 2/3 of the total distance observed. Beyond that you start getting sample sizes that are too small for evaluation.
+
+```{r}
+maxDist = (2/3) * max(distMat)
+
+```
+
+
+Now we can run the correlog function to create our correlogram. We need to input our coordinates, the veg heights associated with those points, and the number of bins into which we want to divide our distances, and specify that we want a two-sided statistical test of significance (i.e., testing for positive and negative spatial dependence).
+
+```{r}
+correlogPgirmess = pgirmess::correlog(coords, vegMatrix$Height, method='Moran', nbclass=14, alternative = 'two.sided')
+
+round(correlogPgirmess, 2)
+```
+
+So we can see that we have divided the distances into 14 roughly equal distance bins, calculated Moran's I for each of those distance bins, and assessed statistical significance using a normal approximation (i.e., assuming the residuals from the regression of nearby values on the local value are normally distributed). So let's plot this correlogram.
+
+```{r}
+
+tmp = data.frame(correlogPgirmess) %>%
+  mutate(significant = ifelse(p.value < 0.05, 'yes', 'no'))
+
+ggplot(tmp, aes(x=dist.class, y=coef))+
+  geom_line()+
+  geom_point(aes(color=significant, size=n))+
+  scale_color_manual(values=c('black', 'red'))+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  geom_hline(yintercept=0, linetype='dashed')+
+  geom_vline(xintercept=maxDist, color='red')+
+  scale_x_continuous(breaks=seq(0, 75, 5))
+
+
+```
+
+We can see some clear evidence for positive spatial autocorrelation in vegetation height out to about 10 m, with some evidence of negative spatial autocorrelation at moderate distances.
+
+**REMEMBER the difference between statistical significance and biological significance**
+
+
+#### ncf package for Monte Carlo permutations
+
+Using a normal approximation to evaluate statistical significance in the various distance bins has its limitations. Namely, the assumption may not be met. The ncf package takes a different approach by using Monte Carlo permutations to ask of the correlation observed in our data is significantly different than what we would expect if the values were randomly distributed in space.
+
+```{r}
+
+correlogNcf = ncf::correlog(x = vegMatrix$x, y=vegMatrix$y, z=vegMatrix$Height, increment=5, resamp=100)
+
+tmp = cbind(correlogNcf$n,
+            correlogNcf$mean.of.class,
+            correlogNcf$correlation,
+            correlogNcf$p) %>% 
+  data.frame() %>% 
+  set_names(c('n', 'dist', 'corr', 'p')) %>% 
+  mutate(significant = ifelse(p < 0.05, 'yes', 'no'))
+
+ggplot(tmp, aes(x=dist, y=corr))+
+  geom_line()+
+  geom_point(aes(color=significant, size=n))+
+  scale_color_manual(values=c('black', 'red'))+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  geom_hline(yintercept=0, linetype='dashed')+
+  geom_vline(xintercept=maxDist, color='red')+
+  scale_x_continuous(breaks=seq(0, 75, 5))
+
+
+```
+
+The main differences between pgirmess and ncf are:
+
+1. pgirmess relies on a normal approximation to evaluate statistical significance while ncf relies on Monte Carlo permutations.
+2. In pgirmess you specify a number of distance bands, but in ncf you specify the actual width of those bands.
+
+
+
+
+# Variograms
+
+We're mostly going to focus on the geoR package because it allows us to compare model-based variograms to one another using likelihood approaches (AIC). It also provides Monte Carlo approaches. Let's start by creating a geoR object and plotting it.
+
+```{r}
+#Note that this is automatically considering the first two columns to be x and y and the third column to be z.
+geoVeg = as.geodata(vegMatrix)
+plot(geoVeg)
+```
+
+The plot function gave us 4 plots for visualizing these data. The first is a color map showing the low values of vegetation height in blue and the high values in red. The second and third values show the distribution of veg height values stratified across x and y coordinates. The final figure shows a histogram of the veg height values.
+
+Now we can build a variogram from this object. Again, here we are specifying that we don't really want to look beyond 2/3 of the distance in the data, and telling it to build the variogram based on distance bins of 3 m.
+
+```{r}
+empGeor = variog(geoVeg, max.dist=maxDist, breaks=seq(0, maxDist, by=3))
+plot(empGeor)
+```
+
+#### Evidence for anisotropy?
+
+So far we have been assuming that the correlation and variation are the same in all directions (isotropic). However, in some situations, we may be interested in considering whether there is an anisotropic pattern in the data, suggesting that the pattern of spatial dependence is NOT variable by direction. In that case, we can use the variog4 function, which is simply going to subset the data into groups based on the directions we give it.
+
+```{r}
+emp4Geor = variog4(geoVeg, max.dist=maxDist, direction = c(0, pi/4, pi/2, 3*pi/4))
+plot(emp4Geor)
+```
+
+Here I would superficially conclude that the spatial covariance patterns are relatively similar in all directions.
+
+#### Fitting variogram models
+
+Recall that we discussed several theoretical models one could use to represent the pattern in a variogram. Here we're going to fit two of those empirical models and compare them using AIC. Let's start with an exponential model.
+
+```{r}
+mlExp = likfit(geoVeg, cov.model='exp', ini=c(700, 10))
+summary(mlExp)
+```
+
+This output is telling us a lot of things. First, we're seeing an AIC value for the spatial model we fit and a comparable value for a non-spatial model that assumes a constant variance that does not change with lag distance. Here we can see that there is clear evidence for spatial covariance, given that the AIC for the constant model is > 100 units greater. We're also seeing estimates for the range, nugget, and partial sill values for the fitted model. For some models (like exponential), we also see an estimate for the "practical range" which approximates the range distance at which the variogram asymptotes.
+
+Next let's fit a spherical theoretical model.
+
+```{r}
+mlSph = likfit(geoVeg, cov.model='sph', ini=c(700, 10))
+summary(mlSph)
+```
+
+Again, we can see that the spatial model is much better than the constant model. When we compare the two fitted spatial models to one another:
+
+```{r}
+AIC(mlExp, mlSph)
+```
+
+We see that the AIC value of the exponential model is slightly lower than that of the spherical model, although the difference is relatively trivial. Finally, we can plot our fitted theoretical variograms on top of the empirical variogram.
+
+```{r}
+plot(empGeor)
+lines(mlExp, col='blue')
+lines(mlSph, col='red')
+```
+
+As always, we are generally interested to know whether the degree of spatial dependence we are seeing here differs significantly from what might be expected if the vegetation height values were randomly distributed. For that, we can use the variog.mc.env() function in geoR. This calculates an envelope for an empirical variogram by permuting the height values across space. Here we are telling the function to permute values over the geoVeg data set and specifying the empirical variogram that we calculated from the geoVeg dataset.
+
+```{r}
+empEnv = variog.mc.env(geoVeg, obj.var=empGeor, nsim=99)
+plot(empGeor, envelope=empEnv)
+lines(mlExp, col='blue')
+```
+
+Now we're seeing our envelope (dashed lines) plotted with the empirical variogram and the fitted variogram model. Note that we are seeing evidence for significant spatial dependence up to about 10 m.
+
+# Kriging
+
+Now that we have a fitted variogram, we can interpolate values to places that were not sampled using kriging. This is analogous to fitting a model and then outputting predicted values to new covariate combinations.
+
+```{r}
+newGrid1m = expand.grid(0:max(vegMatrix$x), 0:max(vegMatrix$y))
+
+krigGeoRExp = krige.conv(geoVeg, locations=newGrid1m, krige=krige.control(cov.pars=c(mlExp$cov.pars[1], mlExp$cov.pars[2]), nugget=mlExp$nugget, cov.model='exp', type.krige='OK'))
+
+image(krigGeoRExp, main='kriged estimates')
+```
+
+So here we are running krige.cov(), which performs spatial predictions. We input our geodata object, our new locations to which we want to predict values, parameters based on our fitted variogram, and specify a type of kriging model to use. Here we're just specifying ordinary kriging. The result is a smoothed map of predicted veg heights. We can also output the uncertainty in the predictions at those points in space.
+
+```{r}
+image(krigGeoRExp, val=sqrt(krigGeoRExp$krige.var), main='kriging SE')
+```
+
