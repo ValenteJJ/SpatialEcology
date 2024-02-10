@@ -1,6 +1,8 @@
 ---
 title: "Lab 6 - Spatial dependence"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 # Introduction
