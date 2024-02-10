@@ -1,0 +1,71 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#Don't forget to load your R packages!
+```
+
+
+# Background
+
+Researchers set up a square plot with a dimension of 130 m on each side. Within the plot they established blue vane traps in a 5 m grid pattern to sample bee abundance. Every day for 10 days the researchers emptied the blue vane traps and recorded the number of bees collected. After the 10-day sampling period, they calculated the mean daily number of bees captured in the trap each day.
+
+# Challenge 1 (2 points)
+
+Import the blueVanes.csv file from GitHub. Plot the mean bee abundance as a function of the x and y coordinates. Upon initial inspection, does there appear to be spatial dependence in the bee response data?
+
+```{r}
+#Place your code here.
+```
+
+Answer the question here.
+
+# Challenge 2 (3 points)
+
+Empirically test for evidence of spatial dependence in bee abundance by first building a corelogram, then building a semi-variogram. Be sure to provide an envelope for assessing whether the values in each figure are statistically different from what would be expected if the bee values were randomly distributed. Describe the patterns you see, and your interpretation with regards to the spatial dependence in mean bee abundance. Be sure to identify the maximum distance at which you should interpret your figures (2/3 of the maximum distance between points).
+
+```{r}
+#Place your code here.
+```
+
+Answer the question here.
+
+# Challenge 3 (4 points)
+
+Fit a simple linear model (assuming a normally distributed error term) that models mean bee abundance as a function of an intercept only (no other covariates in the model). Compare the model-estimated intercept to the bee abundance values averaged across all sites. What do you notice?  
+
+Empirically test for evidence of spatial autocorrelation IN THE MODEL RESIDUALS by first building a correlogram, then building a semi-variogram. Be sure to provide an envelope for assessing whether the values in each figure are statistically different from what would be expected if the bee values were randomly distributed in space. Compare these figures to those built for the raw data. What similarities or differences to you notice?
+
+```{r}
+#Place your code here.
+```
+
+Answer the question here.
+
+# Challenge 4 (4 points)
+
+Conventional wisdom indicates that the distribution of floral resources may substantially influence bee abundance. In addition, I am  completely making up the following fact: the average bee has a perceptual range of about 15 m. Below I have provided code for importing a raster that shows the number of flowers counted in 1 m grid cells across the entire study area. Use the focal() function from the previous lab to generate a new raster in which each cell value represents the mean number of flowers in cells within a 15 m radius. Plot the distribution of the blue vane traps over the 15 m focal raster. No text required here, just show me the plot.
+
+```{r}
+#Place your code here.
+```
+
+No text required
+
+# Challenge 5 (4 points)
+
+Extract the focal flower value from the raster you just created at each point using the extract() function. You now have an estimate for the average number of flowers per meter around each blue vane trap. Fit a second linear model, but this time include average floral abundance within 15 m as a covariate. Export the residuals from this fitted model, and again, examine a corelogram and variogram of the residuals. As always, be sure to plot random envelopes. Now what do you notice?
+
+```{r}
+#Place your code here.
+```
+
+Answer the question here.
+
+# Challenge 6 (3 points)
+
+What is your assessment regarding the distribution of bee abundance in this study area? Does it exhibit spatial dependence, and if so, what is driving that pattern?
+
+Answer the question here.
