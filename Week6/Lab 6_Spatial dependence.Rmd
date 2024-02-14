@@ -15,15 +15,12 @@ First let's load the packages we need today. We're going to be introducing some 
 rm(list=ls())
 
 require(tidyverse)
-# require(sf)
 require(pgirmess)
 require(ncf)
 library(geoR)
-# library(gstat)
-# require(RandomFields)
 ```
 
-#### Raw data
+### Raw data
 
 Let's bring in and examine the raw data briefly.
 
@@ -47,7 +44,7 @@ ggplot(vegMatrix, aes(x=x, y=y, color=Height))+
 
 Recall that correlograms are going to plot the correlation between values of points based on their distance apart. We're going to use two different packages to create correlograms because they vary in the way they estimate statistical significance.
 
-#### pgirmess package for normal approximation
+### pgirmess package for normal approximation
 
 The first thing we're going to need to do is create a matrix of distances among all of the points.
 
@@ -98,7 +95,7 @@ We can see some clear evidence for positive spatial autocorrelation in vegetatio
 **REMEMBER the difference between statistical significance and biological significance**
 
 
-#### ncf package for Monte Carlo permutations
+### ncf package for Monte Carlo permutations
 
 Using a normal approximation to evaluate statistical significance in the various distance bins has its limitations. Namely, the assumption may not be met. The ncf package takes a different approach by using Monte Carlo permutations to ask of the correlation observed in our data is significantly different than what we would expect if the values were randomly distributed in space.
 
@@ -154,9 +151,9 @@ empGeor = variog(geoVeg, max.dist=maxDist, breaks=seq(0, maxDist, by=3))
 plot(empGeor)
 ```
 
-#### Evidence for anisotropy?
+### Evidence for anisotropy?
 
-So far we have been assuming that the correlation and variation are the same in all directions (isotropic). However, in some situations, we may be interested in considering whether there is an anisotropic pattern in the data, suggesting that the pattern of spatial dependence is NOT variable by direction. In that case, we can use the variog4 function, which is simply going to subset the data into groups based on the directions we give it.
+So far we have been assuming that the correlation and variation are the same in all directions (isotropic). However, in some situations, we may be interested in considering whether there is an anisotropic pattern in the data, suggesting that the pattern of spatial dependence is NOT the same in all directions. In that case, we can use the variog4 function, which is simply going to subset the data into groups based on the directions we give it.
 
 ```{r}
 emp4Geor = variog4(geoVeg, max.dist=maxDist, direction = c(0, pi/4, pi/2, 3*pi/4))
@@ -165,7 +162,7 @@ plot(emp4Geor)
 
 Here I would superficially conclude that the spatial covariance patterns are relatively similar in all directions.
 
-#### Fitting variogram models
+### Fitting variogram models
 
 Recall that we discussed several theoretical models one could use to represent the pattern in a variogram. Here we're going to fit two of those empirical models and compare them using AIC. Let's start with an exponential model.
 
