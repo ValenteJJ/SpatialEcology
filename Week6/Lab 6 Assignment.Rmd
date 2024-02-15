@@ -4,7 +4,9 @@ output: html_notebook
 ---
 
 ```{r}
-#Don't forget to load your R packages!
+require(terra)
+
+#Don't forget to load your other R packages!
 ```
 
 
@@ -49,7 +51,10 @@ Answer the question here.
 Conventional wisdom indicates that the distribution of floral resources may substantially influence bee abundance. In addition, I am  completely making up the following fact: the average bee has a perceptual range of about 15 m. Below I have provided code for importing a raster that shows the number of flowers counted in 1 m grid cells across the entire study area. Use the focal() function from the previous lab to generate a new raster in which each cell value represents the mean number of flowers in cells within a 15 m radius. Plot the distribution of the blue vane traps over the 15 m focal raster. No text required here, just show me the plot.
 
 ```{r}
-#Place your code here.
+
+floral = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week6/floralResources.tif')
+
+#Place your additional code here.
 ```
 
 No text required
