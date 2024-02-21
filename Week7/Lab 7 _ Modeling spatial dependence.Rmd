@@ -128,6 +128,7 @@ glmPred = cbind(glmPred, predict(vathElev2, newdata = glmPred, type='link', se=T
 
 ggplot(glmPred, aes(x=elev, y=pred))+
   geom_line()+
+  geom_point()+
   geom_line(aes(y = lcl), linetype='dashed')+
   geom_line(aes(y = ucl), linetype='dashed')+
   theme_bw()+
@@ -415,6 +416,9 @@ Step 1 is to create Thiessen or Voroni polygons from the point data. These polyg
 thiessen = voronoi(coords)
 
 tmp = st_as_sf(thiessen)
+
+plot(thiessen)
+
 
 ggplot()+
   geom_sf(data = tmp)+
