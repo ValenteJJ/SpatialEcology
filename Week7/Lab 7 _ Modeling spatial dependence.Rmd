@@ -1,9 +1,569 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r}
+#Run the code below only once to install the INLA package.
+
+# install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+```
+
+
+```{r, warning=F, message=F}
+require(tidyverse)
+require(terra)
+require(tidyterra)
+require(spdep)
+require(mgcv)
+require(vegan)
+require(spatialreg)
+require(INLA)
+require(deldir)
+require(dismo)
+require(lme4)
+require(MASS)
+require(nlme)
+```
+
+
+# Background
+
+Today we are going to explore solutions when residual spatial dependence exists in your data after fitting your best models. In these situations, model-based ajustments are going to be required to make accurate inference. We are going to be working with data from the Northern Region Landbird Monitoring Program (for more information, see Hutto & Young 2002 [https://www.jstor.org/stable/3784226]). Sampling occurs at 100 m radius sites along transects in Montana and Idaho. The transects are randomly distributed within USFWS lands, but the sampling sites on the transects are placed regularly every 300 m with approximately 10 sites on every transect. At each site, observers conduct 10-minute point counts where they record all birds seen or heard. We are going to be looking at the occurrence of Varied Thrushes (**Ixoreus naevius**) across an elevation gradient. For our purposes, we will consider that each site was sampled exactly once and ignoring the problem of imperfect detection.
+
+First we are going to read in the elevation raster and sampling locations.
+
+```{r}
+elev = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week7/elevation.tif')
+
+vath = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week7/vath_2004.csv')
+
+ggplot()+
+  geom_raster(data=elev, aes(x=x, y=y, fill=elev_km))+
+  scale_fill_gradientn(colours = terrain.colors(7))+
+  geom_point(data=vath, aes(x=EASTING, y=NORTHING))+
+  coord_equal()+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+
+```
+
+From the elevation raster, we can calculate the slope and aspect of each cell. Slope tells us how steep the terrain is at that particular point in space, and aspect tells us what direction the slope is facing.
+
+```{r}
+
+slope = terrain(elev, v='slope', neighbors=8, unit='degrees')
+
+ggplot(slope, aes(x=x, y=y, fill=slope))+
+  scale_fill_gradientn(colours = terrain.colors(7))+
+  geom_raster()+
+  coord_equal()+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+
+aspect = terrain(elev, v='aspect', neighbors=8, unit='degrees')
+
+ggplot(aspect, aes(x=x, y=y, fill=aspect))+
+  scale_fill_gradientn(colours = terrain.colors(7))+
+  geom_raster()+
+  coord_equal()+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+
+
+```
+
+Finally, we can combine all three elevation variables (elevation, slope, and aspect) into a bundled raster or raster "stack."
+
+```{r}
+elevVars = c(elev, slope, aspect)
+
+names(elevVars) = c('elev', 'slope', 'aspect')
+```
+
+The extract() function in the terra package overlays the points on the raster stack and extracts the values of the rasters at each point location.
+
+```{r}
+coords = cbind(vath$EASTING, vath$NORTHING)
+
+landCovs = extract(elevVars, coords)
+
+vath = cbind(vath, landCovs)
+```
+
+# Fitting and comparing logistic regression models
+
+We're going to fit 3 generalized linear models that assume a binomial response variable distribution. In other words, we are going to fit logistic regression models to evaluate the probability of recording a Varied Thrush as a function of elevation-related covariates.
+
+```{r}
+# VATH presence is a linear function of elevation
+vathElev = glm(VATH ~ elev, family='binomial', data=vath)
+
+# VATH presence is a quadratic function of elevation
+vathElev2 = glm(VATH ~ elev + I(elev^2), family='binomial', data=vath)
+
+# Vath presence is a function of elevation, slope, and aspect
+vathAll = glm(VATH ~ elev + slope + aspect, family='binomial', data=vath)
+
+round(AIC(vathElev, vathElev2, vathAll), 2)
+```
+
+It's pretty clear from the AIC model comparison that the quadratic elevation model has the most support. We can look at the output.
+
+```{r}
+summary(vathElev2)
+```
+
+Because the linear elevation term is positive and the quadratic term is negative, this implies that Varied Thrush occupancy probability peaks at intermediate elevations. We can now plot this relationship to visualize it by creating a new dataset and predicting values based on our fitted model.
+
+```{r}
+glmPred = data.frame(elev = seq(min(vath$elev), max(vath$elev), length=15))
+
+glmPred = cbind(glmPred, predict(vathElev2, newdata = glmPred, type='link', se=T)) %>% 
+  mutate(pred = plogis(fit),
+         ucl = plogis(fit + 1.96*se.fit),
+         lcl = plogis(fit - 1.96*se.fit))
+
+ggplot(glmPred, aes(x=elev, y=pred))+
+  geom_line()+
+  geom_line(aes(y = lcl), linetype='dashed')+
+  geom_line(aes(y = ucl), linetype='dashed')+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+
+
+```
+
+We can also predict Varied Thrush occupancy in space by applying our fitted model to the elevation raster.
+
+```{r}
+predRaster = predict(model = vathElev2, object=elevVars)
+predRaster = exp(predRaster)/(1+exp(predRaster))
+plot(predRaster)
+```
+
+And congratulations! Just like that you've fit your first species distribution model. I'm not really sure if it's a good one, but it is one.
+
+# First looks at spatial dependence
+
+Because there are a lot of sampling points here (n = 805), and because the total sampling area covers a rather large extent, I'm modifying a correlog function so that we can set the maximum distance in which we are interested. Otherwise this can take a very long time because there are a lot of potential distance bins.
+
+```{r}
+icorrelogram <- function(locations,z, binsize, maxdist){
+  
+  distbin <- seq(0,maxdist,by=binsize)
+  Nbin <- length(distbin)-1
+  moran.results <- data.frame("dist"= rep(NA,Nbin), "Morans.i"=NA,"null.lower"=NA, "null.upper"=NA)
+  
+  for (i in 1:Nbin){
+    d.start<-distbin[i] 
+    d.end<-distbin[i+1]
+    neigh <- dnearneigh(x=locations, d1=d.start, d.end, longlat=F)
+    wts <- nb2listw(neighbours=neigh, style='B', zero.policy=T)
+    mor.i <- moran.mc(x=z, listw=wts, nsim=200, alternative="greater", zero.policy=T)  #note alternative is for P-value, so only 'significant if positive autocorrelation
+    
+    moran.results[i, "dist"]<-(d.end+d.start)/2 
+    moran.results[i, "Morans.i"]<-mor.i$statistic 								                #observed moran's i
+    moran.results[i, "null.lower"]<-quantile(mor.i$res, probs = 0.025,na.rm = T)#95% null envelope	
+    moran.results[i, "null.upper"]<-quantile(mor.i$res, probs = 0.975,na.rm = T)#95% null envelope
+  }
+  return(moran.results)
+}
+```
+
+We will now use this icorrelogram function to evaluate spatial dependence in the raw Varied Thrush presence/absence data.
+
+```{r}
+vathCor = icorrelogram(locations=coords, z=vath$VATH, binsize=1000, maxdist=15000)
+head(vathCor)
+
+ggplot(vathCor, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+
+```
+
+So looking at the raw data, there appears to be some substantial correlation in the first couple of distance bins because these values fall outside of our random confidence envelope. But, as we all know, our regression assumptions actually apply to the residuals. So what we really want to know is if there is correlation in the residuals of the model.
+
+### A quick aside about residuals
+
+This is not the time nor the place to get into residuals for generalized linear models. They are complicated, there are 4 different types, and they can be a bit difficult to understand. For the purposes of our exploration here, we are going to rely on deviance residuals which are intuitively similar to the residuals you may be used to from a linear model.
+
+### Dependence in deviance residuals from non-spatial model
+
+So we're going to pull out the deviance residuals from our best fitted model (which included the quadratic elevation effect). Then we're going to run the same icorrelogram() function on those residuals.
+
+```{r}
+vathElev2Res = residuals(vathElev2, type='deviance')
+
+corResids = icorrelogram(locations = coords, z = vathElev2Res, binsize=1000, maxdist=15000)
+
+ggplot(corResids, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+
+plot(vathCor$Morans.i, corResids$Morans.i)
+abline(a=0, b=1, col='red')
+```
+
+So, by fitting the elevation model, we have NOT removed the spatial dependence from the data. We're going to need another solution.
+
+# Subset points
+
+First, we can try the least-ideal solution. We can subset the points in an attempt to reduce the spatial dependence. Because points fall along transects, we may want to try sub-setting out a single point from each transect to get rid of all of the others that may be aggregated in space.
+
+```{r}
+subData = vath %>% 
+  mutate(randomVar = runif(nrow(.), min=0, max=1)) %>% 
+  group_by(TRANSECT) %>% 
+  filter(randomVar == min(randomVar)) %>% 
+  ungroup()
+
+subModel = glm(VATH ~ elev + I(elev^2), family='binomial', data=subData)
+summary(subModel)
+
+```
+
+Note that by taking this step and sub-setting the data, we have reduced our sample size from 805 to 167 sample points. As a result, the standard errors around our parameter estimates tripled, and the elevation parameters are no longer statistically significant. But...
+
+```{r}
+resids = residuals(subModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(subData$EASTING, subData$NORTHING), z=resids, binsize=2000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+```
+
+It appears as though we have fixed our spatial dependence problem. Of course, this has come with a cost. Perhaps another approach might be better in this particular situation.
+
+# Trend surface models
+
+Now we're going to try several types of models that are going to help us account for spatial dependence. The first is the trend surface model. As we discussed, there are 2 approaches that fit into the "trend surface model" category. We can use polynomial regression, or we can use generalized additive models. 
+
+### Polynomial regression
+
+Here we're going to start with polynomial regression and include a cubic model for the x and y coordinates.
+
+
+```{r}
+polyModel = glm(VATH ~ elev + I(elev^2) + EASTING + NORTHING + I(EASTING^2) + I(EASTING^3) + I(NORTHING^2) + I(NORTHING^3), family='binomial', data=vath)
+
+summary(polyModel)
+
+resids = residuals(polyModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+
+
+```
+
+
+### GAM
+
+And then we can try a GAM function. The gam() function in the mgcv package automates the choice of the spline function through cross validation. Basically, elevation is being modeled similarly to how it was being modeled above, and then the syntax I've used below automatically selects the number of knots to fit the best model for the X and Y coordinates.
+
+```{r}
+gamModel = gam(VATH ~ elev + I(elev^2) + s(EASTING, NORTHING), family='binomial', data=vath)
+
+summary(gamModel)
+
+resids = residuals(gamModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+```
+
+The polynomial regression left much to be desired in terms of removing spatial dependence. However, the GAM model did a relatively decent job. That said, there still seems to be some residual dependence at low distances, and it might be worth exploring other options.
+
+
+# Eigenvector mapping
+
+Frankly, this is complicated, but I'm going to show you how to do it anyways. First, we're going to create a spanning tree which creates the minimum set of links necessary to ensure all points are connected.
+
+```{r}
+spantreeEm = spantree(dist(coords), toolong=0)
+```
+
+Now we're going to identify neighborhoods using the maximum distance in the spantree as a threshold distance. This creates a list of spatial neighbors and then we can measure the distance among all of those points considered a spatial neighbor.
+
+```{r}
+
+dnn = dnearneigh(coords, 0, max(spantreeEm$dist))
+
+dnnDists = nbdists(dnn, coords)
+```
+
+So now we're going to transform the distances based on a recommendation from Dormann et al. (2007; https://nsojournals.onlinelibrary.wiley.com/doi/full/10.1111/j.2007.0906-7590.05171.x) and then use that to create a weights matrix.
+
+```{r}
+
+dnnTransform = lapply(dnnDists, function(x) (1-((x/4)^2)))
+weights = nb2listw(dnn, glist=dnnTransform, style='B', zero.policy=T)
+
+```
+
+Now we use the ME() function in the spatialreg package to find the most important eigenvectors that reduce spatial dependence. ME() does this using a brute force approach to evaluate what combination of eigenvectors reduces spatial dependence the most. 
+
+```{r}
+
+vathMe = ME(VATH ~ elev + I(elev^2), family='binomial', listw=weights, data=vath)
+
+vathMe$selection
+
+head(fitted(vathMe),2)
+```
+
+We've now identified 3 eigenvectors that help us reduce spatial dependence. So the last step is to include those eigenvectors into our fitted model and explore the residual spatial dependence.
+
+```{r}
+
+emModel = glm(VATH ~ elev + I(elev^2) + fitted(vathMe), family='binomial', data=vath)
+summary(emModel)
+
+resids = residuals(emModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+```
+
+After all that, this one didn't do a great job for us.
+
+# Autocovariate models
+
+We're going to calculate our autocovariate to include as an explanatory variable in our models. Recall, that we are calculating the autocovariate as a weighted mean of the response variables around it. Using this is an explanatory variable acknowledges that the values nearby affect the values locally. Because most of the autocorrelation we've observed occurs within 1 km, we are going to use that as the neighborhood in which we consider the values at other points. 
+
+```{r}
+auto1km = autocov_dist(vath$VATH, coords, nbs=1000, type='one', style='B', zero.policy=T)
+```
+
+We can now include this autocovariate as an explanatory variable in our logistic regression equation.
+
+```{r}
+auto1kmModel = glm(VATH ~ elev + I(elev^2) + auto1km, family='binomial', data=vath)
+
+summary(auto1kmModel)
+
+
+resids = residuals(auto1kmModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+
+```
+
+This approach has removed the preponderance of the spatial dependence. It has also reduced the effect sizes and the p-values associated with the elevation variable.
+
+# Autoregressive models
+
+Fitting autoregressive models with non-normal error terms is computationally challenging. Because of that, many folks use Bayesian models, simply because it is easier to program these complicated models in Bayesian software, and not because inference lends itself to Bayesian philosophy. The spBayes package can be used for spatial regression, but again, this requires a lot of computer power and run time. A shortcut is to use "Integrated nested Leplace approximation" or INLA. However, this is only available for certain types of Bayesian models. Fortunately, we can use it to fit CAR moels for binary data.
+
+Step 1 is to create Thiessen or Voroni polygons from the point data. These polygons partition a region into convex polygons such that each one contains exactly one point.
+
+```{r}
+thiessen = voronoi(coords)
+
+tmp = st_as_sf(thiessen)
+
+ggplot()+
+  geom_sf(data = tmp)+
+  geom_point(data = vath, aes(x=EASTING, y=NORTHING), color='red')
+
+```
+
+Then we create a matrix of connected points/polygons and format it into the kind of matrix we can use to fit a CAR model.
+
+```{r}
+pointPoly = poly2nb(thiessen)
+
+plot(thiessen)
+points(coords, col='red')
+plot(pointPoly, coords, col='red', add=T)
+
+adj = nb2mat(pointPoly, style='B')
+adj = as(as(as(adj, "dMatrix"), "generalMatrix"), "TsparseMatrix")
+
+```
+
+And we fit the CAR model using the inla() function. We need to specify the type of model we are fitting and the covariates. For a CAR model, we add an observation-level covariate (SURVEYID) and specify 'besag'.
+
+```{r}
+inlaModel = inla(VATH ~ elev + I(elev^2) + f(SURVEYID, model='besag', graph=adj), family='binomial', data=vath, control.predictor=list(compute=T))
+
+summary(inlaModel)
+```
+
+To look at the residuals from a fitted CAR model, we unfortunately have to calculate the deviance residuals by hand because they are not exported automatically. That said, this isn't that hard. 
+
+```{r}
+inlaModelFit = inlaModel$summary.fitted.values$mean
+si = ifelse(vath$VATH==1, 1, -1)
+resids = si*(-2*(vath$VATH*log(inlaModelFit) + (1-vath$VATH) * log(1-inlaModelFit)))^0.5
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+```
+
+And again, after some complex work, we're seeing we haven't really eliminated the spatial dependence in our residuals.
+
+# Multilevel models
+
+There is a natural aggregation or level here in these data. Recall that transects were randomly placed, and then from there the points along the transect were systematic. So now we are going to try and account for the spatial dependence by using a random transect variable. Because this is not a spatially explicit model, we are assuming that the spatial dependence is consistent within a transect, regardless of how far apart two points are located.
+
+```{r}
+
+vath = vath %>% mutate(TRANSECT = as.factor(as.character(TRANSECT)))
+
+glmerModel = lme4::glmer(VATH ~ elev + I(elev^2) + (1|TRANSECT), family='binomial', data=vath)
+
+summary(glmerModel)
+
+resids = residuals(glmerModel, type='deviance')
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+
+```
+
+That random transect effect pretty much took care of the positive spatial autocorrelation, although we now have some negative autocorrelation in the residuals at short distances.
+
+
+# GLS and mixed models
+
+When you are fitting a model that assumes normally distributed residuals, you can use the nlme package to model spatial correlation structures in the residuals. Unfortunately, it's a bit more challenging for generalized linear models. We have to rely on penalized quasi-likelihood to estimate parameters. This approach has some poor properties (Rousset and Ferdy 2014 - https://nsojournals.onlinelibrary.wiley.com/doi/full/10.1111/ecog.00566), and we cannot compare models using likelihood-based approaches if they are fit this way. So why do it? I guess the answer is that it's the best option we've got, and it gives us a mechanism for estimating environmental relationships while accounting for spatial dependence.
+
+Here we're fitting an exponential correlation function within transects and ignoring any dependence among sites that are not on the same transect.
+
+$\color{red}{\text{CAVEAT: We're into some weird and theoretically tenuous stuff here. I THINK I've pulled the residuals out and tested them correctly below, but you may want to dive a little deeper if you're actually going to use this tool in a publication.}}$
+
+```{r}
+spatMixModel = glmmPQL(VATH ~ elev + I(elev^2), random = ~1|TRANSECT, correlation = corExp(form = ~ EASTING + NORTHING), family='binomial', data = vath)
+
+summary(spatMixModel)
+
+resids = resid(spatMixModel)
+
+correlation = icorrelogram(locations = cbind(vath$EASTING, vath$NORTHING), z=resids, binsize=1000, maxdist=15000)
+
+ggplot(correlation, aes(x=dist, y=Morans.i))+
+  geom_line()+
+  geom_point()+
+  ylim(-0.5, 0.5)+
+  theme_bw()+
+  geom_hline(yintercept=0, color='red', linetype='dashed')+
+  geom_line(aes(y=null.lower), linetype='dashed')+
+  geom_line(aes(y=null.upper), linetype='dashed')
+```
+
+And we can also fit a exponential correlation function across the whole study area and ignore transects. I've provided code below, but I'm not going to run it here because it takes quite a long time.
+
+```{r}
+# vath = vath %>% 
+#   mutate(group = 'obs')
+# 
+# glsModel = glmmPQL(VATH ~ elev + I(elev^2), random = ~1|group, correlation=corExp(form = ~EASTING + NORTHING), family='binomial', data=vath)
+
+```
+
+
+# Comparing results
+
+$\color{red}{\text{CAVEAT: This was haphazardly created minutes before class... I need to revisit, but it gets the point across.}}$
+
+
+```{r}
+tmp = rbind(data.frame(summary(vathElev2)$coefficients[2:3,]) %>% mutate('model'='vathElev2'),
+data.frame(summary(subModel)$coefficients[2:3,]) %>% mutate('model'='subModel'),
+data.frame(summary(polyModel)$coefficients[2:3,]) %>% mutate('model'='polyModel'),
+data.frame(summary(gamModel)$coefficients[2:3,]) %>% mutate('model'='gamModel'),
+data.frame(summary(emModel)$coefficients[2:3,]) %>% mutate('model'='emModel'),
+data.frame(summary(auto1kmModel)$coefficients[2:3,]) %>% mutate('model'='auto1kmModel'),
+data.frame(summary(glmerModel)$coefficients[2:3,]) %>% mutate('model'='glmerModel')) %>% 
+  mutate(param = rep(c('elev', 'elev2'), 6)) %>% 
+  mutate(lcl = Estimate - 1.96*Std..Error,
+         ucl = Estimate + 1.96*Std..Error)
+
+ggplot(tmp, aes(x=model, y=Estimate))+
+  facet_wrap(~param)+
+  coord_flip()+
+  geom_point()+
+  geom_errorbar(aes(ymin = lcl, ymax=ucl))+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  geom_hline(yintercept=0, color='red', linetype='dashed')
+
+
+
+
+# summary(spatMixModel)
+# summary(inlaModel)$fixed[2:3,]
 
 ```
 
