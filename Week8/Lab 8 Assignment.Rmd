@@ -1,0 +1,54 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#Don't forget to load your R packages!
+```
+
+
+
+# Challenge 1 (4 points)
+
+In the lab, we created 6 species distribution models (SDMs) for the same species using 6 different techniques. Plot the maps generated from (1) the bioclim envelope function, (2) the GLM model, and (3) the random forest model next to one another. What similarities and differences do you notice among these maps? What might explain some of these differences?
+
+```{r}
+#Place code here
+```
+
+
+# Challenge 2 (4 points)
+
+When we fit our GLM in lab, we used background points, rather than true absence points, to represent pseudo-absences. Fit the exact same GLM model, only this time use presence and true absence data. That is, replace the background rows in the dataframe with rows that represent actual sites where surveys were completed but Varied Thrush were not detected. Once you've fit the GLM, build a new SDM from this fitted model and visually compare the prediction surface to that built based on the presence-background model. What discrepancies do you notice, and what is your intuition regarding which of these two models is more reliable?
+
+```{r}
+#Place code here
+```
+
+# Challenge 3 (4 points)
+
+Now plot the relationship between the 4 explanatory variables and the predicted occupancy values based on the two fitted GLM models (presence-background and presence-absence). Recall that we did this in the latter part of our lab. Do you notice any differences in the covariate patterns between the two models? Does this help you interpret the discrepancies between the predicted surfaces from the two models?
+
+```{r}
+#Place code here
+```
+
+
+# Challenge 4 (4 points)
+
+Varied Thrush are considered forest-dependent, and thus one might characterize mesic forests as "habitat" for the species. Calculate the total amount of mesic forest in the study area, and the mean size of the mesic forest patches.
+
+Using the SDM built from the random forest model, convert the landscape into "habitat" and "non-habitat." To do this, choose a threshold value in your SDM and convert all cells with predicted outcomes greater than this threshold to 1 and all cells with predicted values below your threshold to 0. Justify your choice of your threshold value. Now calculate the total amount of habitat and mean size of habitat patches based on this new raster (i.e., create patches of "habitat" based on aggregations of cells you deemed 1). How do the habitat amount and patch size values compare between the mesic forest approach and the SDM-based approach? In what situations might you rely on one map over the other?
+
+```{r}
+#Place code here
+```
+
+# Challenge 5 (4 points)
+
+When we fit the Maxent model in the lab, we used a regularization constant of 1. Fit the model two more times, using regularization (regmult) constants of 0.5 and 3. Construct figures showing the relationship between the 4 explanatory variables and the predicted outcome from these 3 fitted Maxent models. What is the regularization constant doing? Hint: you may need to Google it.
+
+```{r}
+#Place code here
+```
