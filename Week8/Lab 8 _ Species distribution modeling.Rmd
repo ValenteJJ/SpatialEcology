@@ -1,9 +1,385 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r}
+```{r, warning=F, message=F}
+require(tidyterra)
+require(dismo)
 require(tidyverse)
+require(terra)
+require(predicts)
+require(ggnewscale)
+require(mgcv)
+require(randomForest)
+require(maxnet)
+require(enmSdmX)
+require(gbm)
 ```
+
+# Background
+
+Today we're going to be using the same data from the previous lab. If you recall, sampling occurred at 100 m radius sites along transects in Montana and Idaho. The transects were randomly distributed within USFWS lands, but the sampling sites on the transects were placed regularly every 300 m with approximately 10 sites on every transect. At each site, observers conducted 10-minute point counts where they recorded all birds seen or heard. Again, we're going to be focusing on detections of Varied Thrushes (**Ixoreus naevius**) and using a handful of tools to build species distribution models based on those detections.
+
+We're going to start by importing data collected in 2004. We will use these data to build our SDMs. Technically, what we have here is presence-absence data. However, we're going to subset out the sites where Varied Thrush were detected and treat this as a presence-only dataset. 
+
+```{r}
+
+vathData = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week8/vath_2004.csv')
+
+vathPres = vathData %>% filter(VATH==1)
+vathAbs = vathData %>% filter(VATH==0)
+
+vathPresXy = as.matrix(vathPres %>% select(EASTING, NORTHING))
+vathAbsXy = as.matrix(vathAbs %>% select(EASTING, NORTHING))
+```
+
+A subset of these points were revisited in 2007-2008, and we're going to use results from that sampling effort to validate our models.
+
+```{r}
+
+vathVal = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week8/vath_VALIDATION.csv')
+
+vathValPres = vathVal %>% filter(VATH==1)
+vathValAbs = vathVal %>% filter(VATH==0)
+
+vathValXy = as.matrix(vathVal %>% select(EASTING, NORTHING))
+vathValPresXy = as.matrix(vathValPres %>% select(EASTING, NORTHING))
+vathValAbsXy = as.matrix(vathValAbs %>% select(EASTING, NORTHING))
+
+```
+
+To build an SDM, we need to import information on a handful of covariates that we think will be useful for describing the distribution of Varied Thrush. Thus, we're going to pull in datasets representing elevation, canopy cover, distribution of mesic forest, and mean annual precipitation.
+
+```{r}
+elev = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/elevation.tif')
+canopy = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/canopy.tif')
+mesic = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/mesic.tif')
+precip = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/precip.tif')
+
+crs(elev) = crs(mesic)
+crs(canopy) = crs(mesic)
+```
+
+One challenge you'll often run into with building SDMs is that you need to use spatial data that not only have the same projection, but also have the same extent and resolution. By using the compareGeom() function, we can evaluate whether these 4 rasters are compatibile.
+
+```{r}
+compareGeom(elev, canopy, stopOnError=F)
+compareGeom(elev, precip, stopOnError=F)
+compareGeom(elev, mesic, stopOnError=F)
+```
+
+It turns out the answer is no. Elevation and canopy have the same properties, but precipitation and mesic are a bit different. Let's look at elevation and mesic for an example.
+
+```{r}
+
+elev
+
+mesic
+
+ggplot()+
+  geom_raster(data=elev, aes(x=x, y=y, fill=elev_km))+
+  scale_fill_gradientn(colors=c('blue', 'white', 'red'))+
+  new_scale_fill()+
+  geom_raster(data=mesic, aes(x=x, y=y, fill=a_pmesic), alpha=0.2)+
+  scale_fill_gradientn(colors=c('yellow', 'black', 'green'))+
+  coord_fixed()+
+  theme_bw()+
+  theme(panel.grid=element_blank())+
+  xlim(21000, 23000)+
+  ylim(302000, 303000)
+```
+
+I've zoomed in on a section of this map so you can see the problem. Because these two rasters don't have the same origins, extents, and resolutions, the cells don't match up. This creates a problem when we want to make predictions to cells using explanatory variables from both the mesic and elevation rasters. To solve this problem, we need to resample the mesic and precipitation rasters to have the same properties as the elevation and canopy rasters. We'll do that with the resample() function. Recall that when we do any kind of aggregation or resampling with a raster, we're going to have to make a decision about how to assign the values in the new raster. For the mesic raster, we're going to use the "nearest neighbor" method, and for the precipitation raster we'll use bilinear interpolation. We'll also mask out the values in the new rasters for which we have no information in the elevation raster (i.e., those cells that are NAs).
+
+```{r}
+mesic = resample(x = mesic, y = elev, 'near')
+precip = resample(x = precip, y = elev, 'bilinear')
+
+mesic = mask(mesic, elev)
+precip = mask(precip, elev)
+```
+
+Just verifying that we've solved our problems.
+
+```{r}
+compareGeom(elev, precip, canopy, mesic)
+```
+
+Now, rather than using mesic as a 0/1 variable, I want to measure the amount of mesic forest within 1 km of my sampling locations. So I'm going to use our focal() tools to create a new raster from which I can extract these values.
+
+```{r}
+probMatrix = focalMat(mesic, 1000, type='circle', fillNA=FALSE)
+mesic1km = focal(mesic, probMatrix, fun='sum')
+
+```
+
+Next, I can combine all 5 of my explanatory variable rasters into one stack and visualize them.
+
+```{r}
+layers = c(canopy, elev, mesic, mesic1km, precip)
+names(layers) = c('canopy', 'elev', 'mesic', 'mesic1km', 'precip')
+plot(layers)
+```
+
+Each of these elements may play a role in affecting the distribution of Varied Thrush, and our goal is to use the data present in all of these layers to our advantage. As a last step, we want to evaluate correlation between these covariates.
+
+```{r}
+pairs(layers, maxpixels=1000)
+```
+
+Not the strong correlation in mesic and mesic1km. We probably shouldn't put those variables in any models at the same time.
+
+```{r}
+layers = c(canopy, elev, mesic1km, precip)
+names(layers) = c('canopy', 'elev', 'mesic1km', 'precip')
+```
+
+
+# Background points
+
+For many SDM applications, we will only have presence information and will be lacking known absence data. Again, we're trying to replicate this situation here, so we need to create our own "background" points that represent the distribution of habitat elements available on the landscape. The backgroundSample() function is useful for us here. Not only will it randomly distribute sampling locations in our space of interest, but we can input coordinates for our known presence locations so that random points do not fall in the same places.
+
+```{r}
+set.seed(23)
+
+backXy = data.frame(backgroundSample(layers, n=2000, p=vathPresXy))
+
+ggplot()+
+  geom_raster(data=elev, aes(x=x, y=y, fill=elev_km))+
+  geom_point(data=backXy, aes(x=x, y=y))+
+  geom_point(data=vathPres, aes(x=EASTING, y=NORTHING), color='red', alpha=0.3)+
+  coord_fixed()
+```
+
+So, now we have our presence points, our background points, and our validation points. Let's pull our 4 explanatory variables out of our rasters for each of those data sets, and then convert them into dataframes containing all of the information we have on each point thusfar.
+
+```{r}
+presCovs = extract(layers, vathPresXy)
+backCovs = extract(layers, backXy)
+valCovs = extract(layers, vathValXy)
+
+presCovs = data.frame(vathPresXy, presCovs, pres=1)
+backCovs = data.frame(backXy, backCovs, pres=0)
+valCovs = data.frame(vathValXy, valCovs)
+```
+
+Finally, I'm going to quickly remove any sites that may have inadvertently fallen into a cell where we don't have information on the explanatory variables, and then combine our presence points from 2004 with our background points.
+
+```{r}
+presCovs = presCovs[complete.cases(presCovs),]
+backCovs = backCovs[complete.cases(backCovs),]
+valCovs = valCovs[complete.cases(valCovs),]
+
+
+backCovs = backCovs %>% select(-ID)
+colnames(presCovs)[1:2] = c('x', 'y')
+
+presBackCovs = rbind(presCovs, backCovs)
+
+```
+
+
+
+# Envelopes
+
+Recall that envelope models only use presence data. The bioclim() function calculates the percentiles of the observed environmental covariates at each location where the species was detected. Values for each point are then compared to these distributions. The closer values are to the median of all of the covariates, the more suitable that location is deemed.
+
+```{r}
+tmp = presCovs %>% select(elev, precip, mesic1km, canopy) %>% 
+  as.matrix()
+
+bioclim = envelope(tmp)
+
+
+plot(bioclim, a=1, b=2, p=0.95)
+plot(bioclim, a=1, b=3, p=0.95)
+plot(bioclim, a=3, b=4, p=0.95)
+
+bioclimMap = predict(layers, bioclim)
+plot(bioclimMap)
+```
+
+It's a rather simple tool, but it makes a lot of intuitive sense. One of the downsides is that it gives equal weight to all covariates you input, so there is no evaluation of whether a particular covariate actually influences presence/absence.
+
+# GLMs
+
+Let's move onto something a bit more mathy. Here we're going to fit a generalized linear model (logistic regression) in which we model the presence and background points as a function of our 4 covariates.
+
+```{r}
+glmModel = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=presBackCovs)
+
+summary(glmModel)
+
+glmMap = predict(layers, glmModel, type='response')
+plot(glmMap)
+```
+
+One limitation of this approach is that we are limited to assuming linear and/or polynomial relationships between presence and the covariates of interest. We also have to be very explicit about any interactions that we think may exist, and again, we are limited in our ability to specify how complicated these relationships are. Nonetheless, this approach is very intuitive as well. We build a model that accurately reflects differences between presence and background sites, then use it to predict the likely probability of presence at other points.
+
+# GAMs
+
+GAMs do a much better job of capturing non-linear relationships between explanatory variables and presence because they use splines to build the links. Below I am specifying 6 knots for each of the covariates which allows for a lot of flexibility in molding the relationships.
+
+```{r}
+gamModel = gam(pres ~ s(canopy, k=6) + s(elev, k=6) + s(mesic1km, k=6) + s(precip, k=6), family='binomial', data=presBackCovs, method='ML')
+
+summary(gamModel)
+
+gamMap = predict(layers, gamModel, type='response')
+
+plot(gamMap)
+
+```
+
+Despite this ability to add complexity, GAMs are still unable to capture quite as much of the non-linearity as other approaches described below.
+
+# Boosted regression trees
+
+```{r}
+
+boostModel = gbm(pres ~ elev + canopy + mesic1km + precip, distribution='bernoulli', n.trees=100, interaction.depth=2, shrinkage=0.1, bag.fraction=0.5, data=presBackCovs)
+
+boostMap = predict(layers, boostModel, type='response')
+boostMap = mask(boostMap, layers$canopy)
+plot(boostMap)
+
+```
+
+
+
+# Random forests
+
+Random forest models are going to create a bunch of classification trees by bootstrapping random samples from the data we feed into it. There are two parameters we need to choose when fitting our model. The first is mtry which is the number of explanatory variables sampled for each tree. The second is ntree which is the number of trees in the forest. We can start by using the tuneRF function to help us identify the best value of mtry.
+
+```{r}
+
+tuneRF(y = as.factor(presBackCovs$pres), x=presBackCovs[,3:6], stepFactor = 2, ntreeTry = 500)
+```
+
+Here it looks like our error OOB error is minimized when we use a mtry value of 2, so that's what we'll use to fit our models. We are going to leave the value of ntree at 500 which is the default.
+
+
+```{r}
+
+rfModel = randomForest(as.factor(pres) ~ canopy + elev + mesic1km + precip, data=presBackCovs, mtry=2, ntree=500, na.action = na.omit)
+
+rfMap = predict(layers, rfModel, type='prob', index=2)
+plot(rfMap)
+```
+
+Once again, we can predict the values from our fitted random forest model to our landscape.
+
+# Maximum entropy
+
+Finally, we're going to try a maxent model. Recall that maxent should ONLY be used with presence-only data. There are a few parameters here that we can tweak as well. The first is regmult which is a regularization constant. As the value of regmult increases, a greater penalty is imposed on coefficients that do not explain much variability in presence locations. The second is the types of basis functions that can be considered. We can specify any combination of "lqpht" (linear, quadratic, product, hinge, or threshold).
+
+```{r}
+
+pbVect = presBackCovs$pres
+covs = presBackCovs %>% select(canopy:precip)
+
+maxentModel = maxnet(p = pbVect,
+                     data= covs,
+                     regmult = 1,
+                     classes='lqpht')
+
+plot(maxentModel, type='logistic')
+
+maxentMap = predictMaxNet(maxentModel, layers, type='logistic')
+
+par(mfrow=c(1,1))
+plot(maxentMap)
+```
+
+# Comparing parameter estimates
+
+As a final step here, let's look at the partial plots to examine the relationship between predicted occurrence and the environmental variables. 
+
+```{r}
+
+tmp = expand.grid(elev = seq(min(backCovs$elev), max(backCovs$elev), length=1000),
+                  canopy = mean(backCovs$canopy),
+                  precip = mean(backCovs$precip),
+                  mesic1km = mean(backCovs$mesic1km))
+
+elevData = data.frame(bioclim = predict(bioclim, tmp),
+                 glm = predict(glmModel, tmp, type='response'),
+                 gam = predict(gamModel, tmp, type='response'),
+                 boost = predict(boostModel, tmp, type='response'),
+                 rf = predict(rfModel, tmp, type='prob')[,2],
+                 maxent = predict(maxentModel, tmp, type='logistic')[,1]) %>% 
+  cbind(tmp) %>% 
+  select(bioclim:elev) %>% 
+  pivot_longer(bioclim:maxent) %>% 
+  mutate(variable = 'elevation')
+
+tmp = expand.grid(elev = mean(backCovs$elev),
+                  canopy = seq(min(backCovs$canopy), max(backCovs$elev), length=1000),
+                  precip = mean(backCovs$precip),
+                  mesic1km = mean(backCovs$mesic1km))
+
+canopyData = data.frame(bioclim = predict(bioclim, tmp),
+                 glm = predict(glmModel, tmp, type='response'),
+                 gam = predict(gamModel, tmp, type='response'),
+                 boost = predict(boostModel, tmp, type='response'),
+                 rf = predict(rfModel, tmp, type='prob')[,2],
+                 maxent = predict(maxentModel, tmp, type='logistic')[,1]) %>% 
+  cbind(tmp) %>% 
+  select(bioclim:maxent, canopy) %>% 
+  pivot_longer(bioclim:maxent) %>% 
+  mutate(variable = 'canopy')
+
+tmp = expand.grid(elev = mean(backCovs$elev),
+                  canopy = mean(backCovs$canopy),
+                  precip = seq(min(backCovs$precip), max(backCovs$precip), length=1000),
+                  mesic1km = mean(backCovs$mesic1km))
+
+precipData = data.frame(bioclim = predict(bioclim, tmp),
+                 glm = predict(glmModel, tmp, type='response'),
+                 gam = predict(gamModel, tmp, type='response'),
+                 boost = predict(boostModel, tmp, type='response'),
+                 rf = predict(rfModel, tmp, type='prob')[,2],
+                 maxent = predict(maxentModel, tmp, type='logistic')[,1]) %>% 
+  cbind(tmp) %>% 
+  select(bioclim:maxent, precip) %>% 
+  pivot_longer(bioclim:maxent) %>% 
+  mutate(variable = 'precipitation')
+
+tmp = expand.grid(elev = mean(backCovs$elev),
+                  canopy = mean(backCovs$canopy),
+                  precip = mean(backCovs$precip),
+                  mesic1km = seq(min(backCovs$mesic1km), max(backCovs$mesic1km), length=1000))
+
+mesicData = data.frame(bioclim = predict(bioclim, tmp),
+                 glm = predict(glmModel, tmp, type='response'),
+                 gam = predict(gamModel, tmp, type='response'),
+                 boost = predict(boostModel, tmp, type='response'),
+                 rf = predict(rfModel, tmp, type='prob')[,2],
+                 maxent = predict(maxentModel, tmp, type='logistic')[,1]) %>% 
+  cbind(tmp) %>% 
+  select(bioclim:maxent, mesic1km) %>% 
+  pivot_longer(bioclim:maxent) %>% 
+  mutate(variable = 'mesic1km')
+
+
+colnames(elevData)[1] = colnames(canopyData)[1] = colnames(precipData)[1] = colnames(mesicData)[1] = 'xValue'
+
+tmp = rbind(elevData, canopyData, precipData, mesicData)
+
+ggplot(tmp, aes(x=xValue, y=value, color=name))+
+  facet_wrap(~variable, scales='free_x')+
+  geom_line()+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+
+
+```
+
+There's a LOT to unpack here. One of the first things you'll notice is the general difference in the magnitude of the predictecd values. Bioclim is modeling similarity while Maxent predictions are based on logistic predictions that make the average prediction for presence locations 0.5. GLM, GAM, BRT, and RF are all discriminating presence from background points such that the predicted value is the probability that a point will be occupied. Thus, the probabilities are going to fall as you increase the number of background points.
+
+You'll also note that the relationships between the covariates and occurrence tend to be complex for RF, bioclim, and BRT models and much more smooth for the others. After spring break we will be discussing how to interpret these differences and identify the best SDM for your purposes.
+
 
