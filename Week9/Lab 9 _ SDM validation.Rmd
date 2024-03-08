@@ -1,0 +1,288 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r, warning=F, message=F}
+rm(list=ls())
+
+require(tidyterra)
+require(dismo)
+require(tidyverse)
+require(terra)
+require(predicts)
+require(ggnewscale)
+require(mgcv)
+require(randomForest)
+require(maxnet)
+require(enmSdmX)
+require(gbm)
+require(PresenceAbsence)
+require(ecospat)
+```
+
+# Background
+
+This week we are going to start by continuing to work with the Varied Thrush data we've been looking at the past two weeks. If you recall, sampling occurred at 100 m radius sites along transects in Montana and Idaho. The transects were randomly distributed within USFWS lands, but the sampling sites on the transects were placed regularly every 300 m with approximately 10 sites on every transect. At each site, observers conducted 10-minute point counts where they recorded all birds seen or heard, but we are focusing on detections of Varied Thrushes (**Ixoreus naevius**). Last week we built SDMs using several different tools. This week we are going to be evaluating those SDMs to compare among them. Note that while we built our models based on presence-background data collected in 2004, we have validation data that involve surveys collected from a subset of sites a few years later in 2007-2008. 
+
+The code below in this first chunk is just a recap of what we did last week. It's here so we can reconstruct our fitted models from scratch and then use the maps to validate the models. 
+
+```{r}
+
+# Model building data
+vathData = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week8/vath_2004.csv')
+
+vathPres = vathData %>% filter(VATH==1)
+vathAbs = vathData %>% filter(VATH==0)
+
+vathPresXy = as.matrix(vathPres %>% select(EASTING, NORTHING))
+vathAbsXy = as.matrix(vathAbs %>% select(EASTING, NORTHING))
+
+
+
+# Validation data
+vathVal = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week8/vath_VALIDATION.csv')
+
+vathValPres = vathVal %>% filter(VATH==1)
+vathValAbs = vathVal %>% filter(VATH==0)
+
+vathValXy = as.matrix(vathVal %>% select(EASTING, NORTHING))
+vathValPresXy = as.matrix(vathValPres %>% select(EASTING, NORTHING))
+vathValAbsXy = as.matrix(vathValAbs %>% select(EASTING, NORTHING))
+
+
+
+# Bringing in the covariates
+elev = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/elevation.tif')
+canopy = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/canopy.tif')
+mesic = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/mesic.tif')
+precip = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week8/precip.tif')
+
+
+# Resampling to make the covariate rasters match
+mesic = resample(x = mesic, y = elev, 'near')
+precip = resample(x = precip, y = elev, 'bilinear')
+
+mesic = mask(mesic, elev)
+precip = mask(precip, elev)
+
+# Mesic forest within 1 km
+probMatrix = focalMat(mesic, 1000, type='circle', fillNA=FALSE)
+mesic1km = focal(mesic, probMatrix, fun='sum')
+
+
+# Building the raster stack
+layers = c(canopy, elev, mesic1km, precip)
+names(layers) = c('canopy', 'elev', 'mesic1km', 'precip')
+
+
+#Creating background points
+set.seed(23)
+
+backXy = data.frame(backgroundSample(layers, n=2000, p=vathPresXy))
+
+# Extracting covariates for our different points
+presCovs = extract(layers, vathPresXy)
+backCovs = extract(layers, backXy)
+valCovs = extract(layers, vathValXy)
+
+presCovs = data.frame(vathPresXy, presCovs, pres=1)
+backCovs = data.frame(backXy, backCovs, pres=0)
+valCovs = data.frame(vathValXy, valCovs)
+
+presCovs = presCovs[complete.cases(presCovs),]
+backCovs = backCovs[complete.cases(backCovs),]
+
+# Combining presence and background data into one dataframe
+
+backCovs = backCovs %>% select(-ID)
+colnames(presCovs)[1:2] = c('x', 'y')
+
+presBackCovs = rbind(presCovs, backCovs)
+
+# Fitting bioclim envelope model
+tmp = presCovs %>% select(elev, precip, mesic1km, canopy) %>% 
+  as.matrix()
+
+bioclim = envelope(tmp)
+
+bioclimMap = predict(layers, bioclim)
+
+
+
+# Fitting GLM
+glmModel = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=presBackCovs)
+
+glmMap = predict(layers, glmModel, type='response')
+
+
+# Fitting GAM
+gamModel = gam(pres ~ s(canopy, k=6) + s(elev, k=6) + s(mesic1km, k=6) + s(precip, k=6), family='binomial', data=presBackCovs, method='ML')
+
+gamMap = predict(layers, gamModel, type='response')
+
+
+# Fitting boosted regression tree model
+
+boostModel = gbm(pres ~ elev + canopy + mesic1km + precip, distribution='bernoulli', n.trees=100, interaction.depth=2, shrinkage=0.1, bag.fraction=0.5, data=presBackCovs)
+
+boostMap = predict(layers, boostModel, type='response')
+boostMap = mask(boostMap, layers$canopy)
+
+
+# Fitting random forest model
+
+rfModel = randomForest(as.factor(pres) ~ canopy + elev + mesic1km + precip, data=presBackCovs, mtry=2, ntree=500, na.action = na.omit)
+
+rfMap = predict(layers, rfModel, type='prob', index=2)
+
+
+#Fitting maxent model
+
+pbVect = presBackCovs$pres
+covs = presBackCovs %>% select(canopy:precip)
+
+maxentModel = maxnet(p = pbVect,
+                     data= covs,
+                     regmult = 1,
+                     classes='lqpht')
+
+
+maxentMap = predictMaxNet(maxentModel, layers, type='logistic')
+
+```
+
+# Model validation with new presence-absence data
+
+So we now have 6 fitted SDMs and associated maps. Recall that we talked about different tools one can use for evaluating these models, and we separated these into validation tools that involve presence-absence data, and tools that involve presence-only data. We will start with our tools that utilize presence-absence validation data.
+
+### Discrimination
+
+Below I am creating a new dataframe that includes all of the complete cases from the validation data. Recall that none of these data were used in model development.
+
+```{r}
+tmp = valCovs %>% mutate(VATH = vathVal$VATH)
+tmp = tmp[complete.cases(tmp),]
+```
+
+Now we are going to create a new data frame from our validation data set that is formatted for use with the PresenceAbsence package. PresenceAbsence has a pretty comprehensive set of evaluation metrics for these models. The first column of the data frame is going to be a site ID, the second is going to be the observed responses, and the other columns contain prediction values for the validation locations based on the various models. We can include predictions from multiple models, and each one has its own column (after the first two).
+
+```{r}
+
+valData = data.frame('ID' = 1:nrow(tmp)) %>% 
+  mutate(obs = tmp$VATH,
+         bioVal = predict(bioclim, tmp %>% select(canopy:precip)),
+         glmVal = predict(glmModel, tmp %>% select(canopy:precip), type='response'),
+         gamVal = predict(gamModel, tmp %>% select(canopy:precip), type='response'),
+         boostVal = predict(boostModel, tmp %>% select(canopy:precip), type='response'),
+         rfVal = predict(rfModel, tmp %>% select(canopy:precip), type='prob')[,2],
+         maxentVal = predict(maxentModel, tmp %>% select(canopy:precip), type='logistic')[,1])
+
+```
+
+We're now going to apply several functions to this data frame and calculate AUC, sensitivity, specificity, TSS, Kappa, correlation, and log likelihood for each of the fitted models. From there, we can compare  
+
+```{r}
+summaryEval = data.frame(matrix(nrow=0, ncol=9))
+
+nModels = ncol(valData)-2
+
+
+for(i in 1:nModels){
+  
+  #AUC
+  auc = auc(valData, which.model = i)
+  
+  #Find threshold to maximize Kappa
+  kappaOpt = optimal.thresholds(valData, which.model = i, opt.methods=3)
+  
+  #Sensitivity
+  sens = sensitivity(cmx(valData, which.model=i, threshold = kappaOpt[[2]]))
+  
+  #Specificity
+  spec = specificity(cmx(valData, which.model = i, threshold = kappaOpt[[2]]))
+  
+  #True skill statistic
+  tss = sens$sensitivity + spec$specificity - 1
+  
+  #Kappa
+  kappa = Kappa(cmx(valData, which.model = i, threshold = kappaOpt[[2]]))
+  
+  #Correlation between predicted and realized values
+  corr = cor.test(valData[,2], valData[,i+2])$estimate
+  
+  #Log likelihood
+  ll = sum(log(valData[,i+2]*valData[,2] + (1-valData[,i+2]) * (1-valData[,2])))
+  ll = ifelse(ll == '-Inf', sum(log(valData[,i+2] + 0.01)*valData[,2] + log((1-valData[,i+2]))*(1-valData[,2])), ll)
+  
+  #Put them all together and save the values
+  summaryI = c(i, auc$AUC, corr, ll, kappaOpt[[2]], sens$sensitivity, spec$specificity, tss, kappa[[1]])
+  summaryEval = rbind(summaryEval, summaryI)
+}
+
+summaryEval = summaryEval %>% 
+  setNames(c('model', 'auc', 'corr', 'll', 'threshold', 'sens', 'spec', 'tss', 'kappa')) %>% 
+  mutate(model = colnames(valData)[3:8])
+
+summaryEval
+```
+
+
+### Calibration
+
+Now let's look at the calibration plot for one of our models. I'm choosing the glm model rather arbitrarily.
+
+```{r}
+calibration.plot(valData, which.model=2, N.bins=20, xlab='predicted', ylab='Observed', main='maxent')
+```
+
+Recall that if our model is well calibrated for the validation data, we would expect these values to fall roughly along the 1-1 line. Here we are seeing that the proportion of observed sites that are occupied falls below the proportion predicted at higher values. This means that our model is predicting greater occupancy than we are observing.
+
+# Model validation with presence-only data
+
+
+Now we are going to test our models using presence-only data. This time, we are going to be using a k-fold approach and pretending we don't have independent data and calculating the Boyce index for these models. Note that we are using the Boyce index here because the held-out validation data are presence-only (because these models were built with presence-background data). Thus, the above tools (e.g., AUC, TSS, Kappa) are not applicable here. We CAN use those statistics with k-fold validation, but ONLY if the models are fit using presence-absence data.
+
+
+First we will split the presence and background data into 5 groups.
+
+```{r}
+set.seed(23)
+
+nFolds = 5
+kfoldPres = kfold(presCovs, k=nFolds)
+kfoldBack = kfold(backCovs, k=nFolds)
+```
+
+Then we will run the GLM on each of the 5 subsets of data and calculate a Boyce index value for the held-out data.
+
+```{r}
+
+boyceVals = rep(NA, nFolds)
+
+for(i in 1:nFolds){
+  valPres = presCovs[kfoldPres==i,]
+  
+  trainPres = presCovs[kfoldPres!=i,]
+  trainBack = backCovs[kfoldBack!=i,]
+  trainBoth = rbind(trainPres, trainBack)
+  
+  glmModel2 = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=trainBoth)
+
+  valData = data.frame('ID' = 1:nrow(valPres)) %>% 
+  mutate(obs = valPres$pres,
+         glmVal = predict(glmModel2, valPres %>% select(canopy:precip), type='response'))
+  
+boyceVals[i] = ecospat.boyce(fit = glmMap, obs=valData[,3], res=100, PEplot=F)$cor
+
+
+mean(boyceVals)
+
+}
+```
+
+
+In general, we tend to see "better" validation values when conducting k-fold validation than when we use a completely separate dataset.
+
+# Ensemble models
