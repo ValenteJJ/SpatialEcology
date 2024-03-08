@@ -164,6 +164,8 @@ valCovs = extract(layers, vathValXy)
 presCovs = data.frame(vathPresXy, presCovs, pres=1)
 backCovs = data.frame(backXy, backCovs, pres=0)
 valCovs = data.frame(vathValXy, valCovs)
+
+
 ```
 
 Finally, I'm going to quickly remove any sites that may have inadvertently fallen into a cell where we don't have information on the explanatory variables, and then combine our presence points from 2004 with our background points.
@@ -294,7 +296,7 @@ par(mfrow=c(1,1))
 plot(maxentMap)
 ```
 
-# Comparing parameter estimates
+# Comparing parameter estimates.
 
 As a final step here, let's look at the partial plots to examine the relationship between predicted occurrence and the environmental variables. 
 

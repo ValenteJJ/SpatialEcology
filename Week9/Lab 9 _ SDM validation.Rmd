@@ -283,6 +283,3 @@ mean(boyceVals)
 ```
 
 
-In general, we tend to see "better" validation values when conducting k-fold validation than when we use a completely separate dataset.
-
-# Ensemble models
