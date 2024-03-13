@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
@@ -234,7 +236,7 @@ summaryEval
 Now let's look at the calibration plot for one of our models. I'm choosing the glm model rather arbitrarily.
 
 ```{r}
-calibration.plot(valData, which.model=2, N.bins=20, xlab='predicted', ylab='Observed', main='maxent')
+calibration.plot(valData, which.model=2, N.bins=20, xlab='predicted', ylab='Observed', main='glm')
 ```
 
 Recall that if our model is well calibrated for the validation data, we would expect these values to fall roughly along the 1-1 line. Here we are seeing that the proportion of observed sites that are occupied falls below the proportion predicted at higher values. This means that our model is predicting greater occupancy than we are observing.
@@ -276,10 +278,10 @@ for(i in 1:nFolds){
   
 boyceVals[i] = ecospat.boyce(fit = glmMap, obs=valData[,3], res=100, PEplot=F)$cor
 
+}
 
 mean(boyceVals)
 
-}
 ```
 
 
