@@ -221,7 +221,7 @@ Answer the question here.
 
 # Challenge 5 (4 points)
 
-Now calculate the same statistics (AUC, Kappa, and TSS) for each model you developed in Challenge 4 using K-fold validation with 5 groups. Do these models perform better or worse based on K-fold validation (when compared with the validation metrics you calculated on a novel dataset in Challenge 2)? Why might that occur?
+Now calculate the same statistics (AUC, Kappa, and TSS) for each model you developed in Challenge 4 using K-fold validation with 5 groups. Do these models perform better or worse based on K-fold validation (as compared to validation based on novel data)? Why might that occur?
 
 ```{r}
 #Place your code here
