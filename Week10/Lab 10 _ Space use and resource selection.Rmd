@@ -16,6 +16,6 @@ We're going to be using data from 6 panthers, 3 of which are adults, and 3 of wh
 
 
 ```{r}
-
+land = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panther_landcover.grd')
 ```
 
