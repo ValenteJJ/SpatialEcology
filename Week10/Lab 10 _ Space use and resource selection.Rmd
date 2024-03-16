@@ -1,0 +1,21 @@
+---
+title: "Lab 10 - Space use and resource selection"
+output: html_notebook
+---
+
+```{r}
+library(terra)
+library(sf)
+```
+
+
+
+For this lab, we're going to be using radiotelemetry data from Florida panthers (*Puma concolor coryi*) recorded in south Florida. The Florida panther is critically endangered, and there has been a push to understand space use, home ranges, and resource selection. After being collared with radio transmitters, individual panthers are relocated periodically (every 1-3 days) using airplanes. Most of the telemetry locations are recorded during the morning (7:00 am to 12:00 pm) which is a period of time when panthers are typically resting.
+
+We're going to be using data from 6 panthers, 3 of which are adults, and 3 of which are subadults. We're going to first quantify utilization distributions for these cats, then we will contrast different approaches to understanding resource selection which vary in how they capture spatial and temporal scale.
+
+
+```{r}
+
+```
+
