@@ -1,0 +1,52 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Challenge 1 (4 points)
+
+Create a table with 6 rows and 5 columns. Each row should represent one panther. The first column should represent the panther's ID, and the other 4 columns should represent the estimated 95% home range. Make sure that all of your units for your home range estimates are the same. Ensure that the final table outputs from the code below.
+
+
+```{r}
+
+```
+
+No text necessary.
+
+
+# Challenge 2 (4 points)
+
+Build a boxplot showing the distribution of home range sizes. Your x-axis should have 4 categories (one for each home range type), and your y-axis should show the distribution of the home ranges for the 6 panthers. Which home range estimates tend to be largest? Which ones tend to be smallest? What is your intuitive explanation for why this pattern occurs?
+
+```{r}
+# Code here
+```
+
+Answer here
+
+# Challenge 3 (3 points)
+
+Choose 1 panther and generate a 100% home range based on the MCP. Calculate (and report) the proportion of this polygon comprised of wet and dry forest. Do you think these amounts are representative of the wet and dry forest available to your panther? Why or why not?
+
+```{r}
+#Code here
+```
+
+Answer here
+
+# Challenge 4 (6 points)
+
+Using the same panther you chose for Challenge 3, generate 10 sf objects, one representing each of the 10%, 20%, 30%, ..., 90%, and 100% home ranges based on a Brownian bridge model. Extract the proportion of each of those territories comprised of dry forest and wet forest. Now generate two line graphs, one for wet forest and one for dry. On the x-axis, plot increasing home range size (10-100%). On the y-axis plot the proportion of the territory comprised of wet/dry forest, and link these with a line. Finally, add a horizontal line that shows the rough proportion of that forest type available to the panther (based on challenge 3). Show your output below.
+
+```{r}
+# Code here
+```
+
+No text needed
+
+# Challenge 5 (3 points)
+
+Does the panther you chose in Challenge 3/4 prefer dry and/or wet forest? What is your justification for your answer?
+
+
