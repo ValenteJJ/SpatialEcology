@@ -5,7 +5,7 @@ output: html_notebook
 
 # Challenge 1 (4 points)
 
-Create a table with 6 rows and 5 columns. Each row should represent one panther. The first column should represent the panther's ID, and the other 4 columns should represent the estimated 95% home range. Make sure that all of your units for your home range estimates are the same. Ensure that the final table outputs from the code below.
+Create a table with 6 rows and 5 columns. Each row should represent one panther. The first column should represent the panther's ID, and the other 4 columns should represent the estimated 95% home range from the 4 methods we used (MCP, KDE, a-LoCoH, and Brownian bridge). Make sure that all of your units for your home range estimates are the same. Ensure that the final table outputs from the code below.
 
 
 ```{r}
