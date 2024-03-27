@@ -1,0 +1,139 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Re-running code from lab as a starting point
+
+```{r, warning=F}
+require(terra)
+require(tidyterra)
+require(sf)
+require(adehabitatHR)
+require(adehabitatLT)
+require(adehabitatHS)
+require(tidyverse)
+require(survival)
+
+
+#Import landcover tif
+land = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panther_landcover.tif')
+
+#Reclassify the landcover tif
+classification = read.table('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week10/landcover%20reclass.txt', header=T) 
+land = classify(land, classification[,c(1,3)])
+land = categories(land, value=unique(classification[,c(3,4)]))
+
+
+#Import panther locations
+panthers = st_read('/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panthers.shp') %>% 
+  mutate(CatID = as.factor(CatID))
+
+#Calculate wet forest focal statistic (5 km radius)
+wetForest = land
+values(wetForest) = 0
+wetForest[land %in% c(10,12)] = 1
+probMatrix = focalMat(wetForest, 5000, type='circle', fillNA=FALSE)
+wetFocal = focal(wetForest, probMatrix, fun='sum', na.rm=T)
+
+
+#Calculate dry forest focal statistic (5 km radius)
+dryForest = land
+values(dryForest) = 0
+dryForest[land %in% c(11, 13)] = 1
+probMatrix = focalMat(dryForest, 5000, type='circle', fillNA=FALSE)
+dryFocal = focal(dryForest, probMatrix, fun='sum', na.rm=T)
+
+#Stack together 
+layers = c(land, wetFocal, dryFocal)
+names(layers) = c('landcover', 'wetForest', 'dryForest')
+
+#Recreate our used points object
+use = terra::extract(layers, panthers) %>% 
+  data.frame() %>% 
+  mutate(CatID = as.factor(panthers$CatID)) %>% 
+  group_by(CatID, landcover) %>%
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  arrange(landcover) %>% 
+  pivot_wider(names_from = landcover, values_from = n, values_fill=0) %>% 
+  data.frame()
+row.names(use) = use$CatID
+use$CatID = NULL
+
+#Recreate our available points object for a type II design
+set.seed(8)
+randII = spatSample(land, size=1000, as.points=T)
+randIILand = data.frame(randII)
+
+availII = randIILand %>% 
+  group_by(Description2) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  rename(landcover = Description2) %>% 
+  filter(!(is.na(landcover) | landcover=='Exotics')) %>% 
+  pivot_wider(names_from = landcover, values_from = n)
+```
+
+
+# Challenge 1 (5 points)
+
+In the lab, we estimated Manly's statistic (wi) values for a type II study design. We also fit a logistic regression for a type II study design. For this challenge, you're going to explore the relationship between wi values and beta values from a logistic regression model. Below I have recreated the analysis for producing wi values. I've also reconstructed the dataset we used for fitting the logistic regression models (allCovs).
+
+Fit a new logistic regression model where use is a function of landcover-1 (the -1 removes the intercept from the fitted model). Make sure this is the only covariate in the model. Exponentiate the coefficients from the fitted model and compare them to the wi values calculated for each landcover type. What do you notice? Explain the similarities and/or differences in how you would interpret the wi values and exponentiated coefficients.
+
+```{r}
+#Recreating the wi analysis
+selRatioII = widesII(u = use, 
+                     a = as.vector(as.matrix(availII)),
+                     avknown = F,
+                     alpha = 0.05)
+
+#Recreating the dataset for logistic regression
+useCovs = terra::extract(layers, panthers) %>% 
+  select(-ID) %>% 
+  mutate(use=1)
+backCovs = terra::extract(layers, randII) %>% 
+  select(-ID) %>% 
+  mutate(use=0)
+allCovs = rbind(useCovs, backCovs) %>% 
+  filter(!(is.na(landcover) | landcover=='Exotics')) %>% 
+  mutate(landcover = as.factor(as.character(landcover)))
+
+
+```
+
+# Challenge 2 (5 points)
+
+In the lab, we used the distribution of step lengths and turning angles to help us devise potential steps each individual could have taken at each point in time. Instead of step lengths, build a histogram representing the distribution of step speeds in km/hr. When and why might you choose to sample from a distribution of step speeds to calculate potential step lengths rather than drawing from the distribution of step lengths itself?
+
+```{r}
+
+```
+
+
+# Challenge 3 (5 points)
+
+Path straightness is a metric we can use to evaluate how tortuous of a path a tracked animal took from one point to another. We calculate straightness as the straight line distance between two points divided by the length of the path actually taken. The resulting straightness statistic takes a value between 0 and 1 where 1 indicates a straight line path and 0 represents an infinitely tortuous path.
+
+For each of the 6 panthers, calculate the straightness of the path between the first and last point recorded. To do that, first calculate the numerator for each panther as the straight-line distance between the start and end points. HINT: the coordinates for each point are in UTMs (meters from the Equator and meters from the Prime Meridian). With the x and y coordinates for two different points, you can calculate their straight-line distance using the Pythagorean theorem.
+
+Next calculate the denominator for each panther. To do this, you can simply sum all of the step distances for that particular individual.
+
+Now divide the numerator by the denominator. Which panther took the most tortuous path? Which took the least tortuous path?
+
+```{r}
+
+
+
+```
+
+# Challenge 4 (5 points)
+
+For each panther, calculate the frequency with which locations were recorded as points per day. Plot path straightness as a function of frequency (there should be 6 points on this figure, one per panther). What relationship do you notice between these two variables, and why might that pattern be occurring?
+
+```{r}
+
+```
+
+

@@ -153,7 +153,7 @@ plot(layers)
 
 Recall that when we discussed study designs for evaluating resource selection we talked about 4 types. 
 
-Design I involves sampling at the population-leve where you have no individually identifiable information.
+Design I involves sampling at the population-level where you have no individually identifiable information.
 
 Design II involves comparing use by individuals to availability at the population level.
 
@@ -266,6 +266,8 @@ print('Wi')
 selRatioII$wi
 print('SE Wi')
 selRatioII$se.wi
+
+# plot(selRatioII)
 ```
 
 And we can pull the wi() values out of this resulting object and plot them to see evidence for selection.
@@ -389,8 +391,8 @@ hist(pantherLtraj[[2]][,6], main='Second CatID')
 Or we can look at the distribution of turning angles for panther 2.
 
 ```{r}
-rose.diag(na.omit(pantherLtraj[[2]][,9]), bins=12, prop=1.5)
-circ.plot(pantherLtraj[[2]][,9], pch=1)
+rose.diag(na.omit(pantherLtraj[[2]][,10]), bins=12, prop=1.5)
+circ.plot(pantherLtraj[[2]][,10], pch=1)
 ```
 
 Steps are a bit complicated. They are comprised of 2 points, so that the distance and turning angle show up in a row for a specific point is a bit confusing. That is to say, we need to be careful when generating potential steps that we're paying attention. Below, I have produced code for generating 3 random steps for each used step.
@@ -531,7 +533,7 @@ logitSSF = clogit(use ~ wetForest + dryForest +strata(pair), data=stepData)
 #Same model, except we include a random id effect to account for non-independence among repeated points on the same panther.
 logitCatSSF = clogit(use ~ wetForest + dryForest + strata(pair) + cluster(id), method='approximate', data=stepData)
 
-logitRSF = glm(use ~ wetForest + dryForest, family='binomial', data=stepData)
+# logitRSF = glm(use ~ wetForest + dryForest, family='binomial', data=stepData)
 ```
 
 
