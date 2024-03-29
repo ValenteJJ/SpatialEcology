@@ -1,0 +1,23 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+require(tidyverse)
+require(terra)
+
+
+```
+
+
+
+
+```{r}
+land = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panther_landcover.tif')
+
+crs(land)
+
+res(land)
+```
+
