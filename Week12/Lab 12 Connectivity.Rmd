@@ -6,7 +6,7 @@ output: html_notebook
 ```{r}
 require(tidyverse)
 require(terra)
-
+require(sf)
 
 ```
 
@@ -19,5 +19,22 @@ land = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panther
 crs(land)
 
 res(land)
+```
+
+```{r}
+
+public = st_read('/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week12/panther_publicland.shp')
+
+st_crs(public) = crs(land)
+
+data.frame(public)
+```
+
+
+```{r}
+publicCentroids = st_centroid(public)
+
+plot(st_geometry(public))
+plot(st_geometry(publicCentroids), add=T)
 ```
 
