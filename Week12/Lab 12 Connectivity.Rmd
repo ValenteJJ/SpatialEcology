@@ -1,40 +1,239 @@
 ---
-title: "R Notebook"
+title: "Lab 12 - Connectivity"
 output: html_notebook
 ---
 
-```{r}
+```{r, warning=F, message=F}
+
+rm(list=ls())
+
 require(tidyverse)
 require(terra)
 require(sf)
-
+require(gdistance)
 ```
 
 
+# Functional connectivity among Florida Panther protected areas
 
+Today we're going to be working with two different data sets. First, we'll e revisiting our panther data. This time, we'll be trying to identify connectivity and potential corridors among protected lands in south Florida. Prior work used radio telemetry data to interpret landscape resistance based on point-selection and home range selection functions (https://www.sciencedirect.com/science/article/pii/S0006320705005495).
+
+### Datasets
+
+We're going to be relying on two data sets here. The first is the same vegetation raster we've been working with the past few weeks, developed by the Florida Fish and Wildlife Conservation Commission. Secondly, we'll use a shapefile showing boundaries for some protected areas in southern Florida.
 
 ```{r}
+
+# Read in the landcover raster
 land = rast('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week10/panther_landcover.tif')
 
+# Identify the crs of the landcover raster
 crs(land)
 
+#Look at th raster's resolution
 res(land)
-```
 
-```{r}
 
+
+# Bring in the public lands shapefile
 public = st_read('/vsicurl/https://github.com/ValenteJJ/SpatialEcology/raw/main/Week12/panther_publicland.shp')
 
+# Set the crs of the public lands shapefile
 st_crs(public) = crs(land)
 
+# And look at it
 data.frame(public)
 ```
 
 
-```{r}
+For mapping connectivity among these public lands, we need to identify a point in space from which to do the mapping. Thus, we're going to calculate the centroid of each park which is the center of the mass.
+
+```{r, warning=F}
 publicCentroids = st_centroid(public)
 
 plot(st_geometry(public))
-plot(st_geometry(publicCentroids), add=T)
+plot(st_geometry(publicCentroids), add=T, col='red')
 ```
 
+We are now going to reclassify this landcover map to represent resistance. To do this, just bring in the table below and use the classify() function. Here higher values represent greater resistance to movement. These values were generated from the paper I referenced above, so have a read if you want more information about how we got to these resistance values. For our purposes, just take these numbers at face value.
+
+```{r}
+classification = read.table('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week12/resistance%20reclass.txt', header=T)
+landCost = classify(land, classification[,c(1,3)])
+landCost = raster(landCost)
+
+plot(landCost)
+
+```
+
+# Effective distances
+
+There are several ways to calculate "distances" between protected areas, and we will consider 4 of them. The most straightforward metric is Euclidean distance, also known as straight-line distance. This totally ignores the resistance of the landscape and simply assumes that those protected areas that are physically closer are also more connected.
+
+```{r}
+#Euclidean distance
+
+geoDist = pointDistance(publicCentroids, lonlat=F)
+geoDist = as.dist(geoDist)
+```
+
+Next we will consider the least-cost distance which is the shortest distance between two points based on sum of costs. We can quantify this either in terms of least-cost distance (cumulative cost of the path) or least-cost path length (actual length of the path that has the least cost). Before we can calculate this, however, we need to use the gdistance package to create a transition layer. This converts the raster cells into a sparse network of connections based on the mean conductance value (1/resistance) between pairs of cells
+
+```{r}
+# Calculate conductance transition matrix
+landCond = transition(1/landCost, transitionFunction = mean, 8)
+
+#Do a geographic correction of the conductance values to "correct" for the fact that there are further distances between cells that touch on the diagonal
+landCond = geoCorrection(landCond, type='c', multpl=F)
+```
+
+Now we can calculate the actual least-cost distance using Dijkstra's algorithm.
+
+```{r}
+
+#Least-cost distance
+lcDist = costDistance(landCond, st_coordinates(publicCentroids))
+
+```
+
+Now we will calculate an effective distance based on circuit theory. We assume random walks, acknowledging that different paths are possible. The commute distance function quantifies the expected time for an individual to move from one point to another and back again.
+
+
+```{r}
+#Commute distance
+circuitDist = commuteDistance(landCond, st_coordinates(publicCentroids))
+```
+
+We could also calculate a randomized shortest path. Recall, that here we have a parameter theta that we can tweak. If theta = 0, our analysis is analogous to a circuit theory approach and as theta increases, we approach a least-cost path. In this case, the rSPDistance() function takes an unfortunately long time, so we are going to subset to just the first two points for this exercise in class.
+
+```{r}
+#Randomized shortest path distance
+rspDistT001 = rSPDistance(landCond, from=st_coordinates(publicCentroids)[1,], to=st_coordinates(publicCentroids)[2,], theta=0.001)
+```
+
+
+# Mapping least-cost paths
+
+The above code helped us calculate the effective distances among the protected areas, but this is spatial ecology, and we're interested in mapping the literal paths. For this, we're going to subset our protected areas and focus in on two of them: the Florida Panther Wildlife Refuge, and the Okaloacoochee Slough State Forest. To speed up computation, we're going to crop our raster layer to a region relevant to these two protected areas.
+
+```{r}
+# Choose the extent for cropping
+fpwrOssfExtent = extent(642000, 683000, 237000, 298000)
+
+# Crop the landcover layer
+landSub = crop(land, fpwrOssfExtent)
+
+# Crop the cost layer and create a transition matrix
+landCostSub = crop(landCost, fpwrOssfExtent)
+landCondSub = transition(1/landCostSub, transitionFunction=mean, 8)
+landCondSub = geoCorrection(landCondSub, type='c', multpl=F)
+
+```
+
+Now we can use the shortestPath() function to actually map the least-cost path.
+
+```{r}
+fpwrOssfLcp = shortestPath(landCond, st_coordinates(publicCentroids)[5,], st_coordinates(publicCentroids[3,]), output='SpatialLines')
+
+plot(landCostSub, axes=F)
+plot(st_geometry(public), add=T)
+plot(st_geometry(publicCentroids), col='grey30', add=T)
+lines(fpwrOssfLcp, col='red', lwd=3)
+
+```
+
+
+# Least-cost Corridors
+
+One major criticism of least-cost path analysis is that it focuses only on a single line, and thus sort of assumes that all individuals are going to take that one optimal path. One potential alternative is to instead map a least-cost corridor. This requires a few steps. First, we're going to calculate the accumulated cost surface from our two points.
+
+```{r}
+fpwrCost = accCost(landCondSub, st_coordinates(publicCentroids)[5,])
+ossfCost = accCost(landCondSub, st_coordinates(publicCentroids)[3,])
+
+plot(fpwrCost)
+plot(ossfCost)
+```
+
+Now we can sum the cumulative values for each cell.
+
+```{r}
+leastCostCorridor = overlay(fpwrCost, ossfCost, fun=function(x, y){return(x+y)})
+
+plot(leastCostCorridor)
+```
+
+A clear corridor starts to jump out, and now we can filter to those pixels which have the easiest paths. Here, we're going to focus on the 10% of pixels with the least summed cost.
+
+```{r}
+#Calculate the 10% quantile for the leastCostCorridor raster
+quantile10 = quantile(leastCostCorridor, probs=0.1, na.rm=T)
+quantile10
+
+#Create a new raster with a value of 1 if it has a summed cost in the lower 10% and a NA otherwise
+leastCostCorridor10 = leastCostCorridor
+values(leastCostCorridor10) = NA
+leastCostCorridor10[leastCostCorridor < quantile10] = 1
+
+#Plot this raster and look at it
+plot(leastCostCorridor10, legend=F, axes=F)
+points(publicCentroids, col='grey30')
+lines(fpwrOssfLcp, col='red')
+```
+
+Now that we have these spatially explicit objects, we can use them to extract information for these paths or corridors for conservation planning purposes. First we'll do that for the single path we created.
+
+```{r}
+# Extract landcover pixels for the least-cost path we created
+lcpLand = terra::extract(land, st_as_sf(fpwrOssfLcp)) %>% 
+  setNames(c('id', 'hab')) %>% 
+  group_by(hab) %>% 
+  summarise(n())
+
+lcpLand
+```
+
+And then for our corridor.
+
+```{r}
+# Here we use our corridor as a mask for the landcover raster
+corridorLand = crop(land, leastCostCorridor10)
+corridorLand = mask(raster(corridorLand), leastCostCorridor10)
+
+# We can plot the landcover types in our 10% corridor
+plot(corridorLand, axes=F, legend=F)
+
+# Or simply summarize them
+table(as.vector(corridorLand))
+```
+
+Note that across both files, the values of 17 (cypress swamp), 9 (pinelands), and 12 (freshwater marsh) generally show up as the most common.
+
+
+# Randomized shortest path (flow mapping)
+
+We can contrast our LCP approach above with a randomized shortest path analysis. Again, we are going to assume a random walk for an individual that is biased based on the resistance encountered. The passage() function quantifies the number of potential movements through cells before arriving in a destination location from a source location.
+
+```{r}
+#Random walk
+
+passageMapT0 = passage(landCondSub, origin = st_coordinates(publicCentroids)[3,], goal = st_coordinates(publicCentroids)[5,], theta=0)
+
+plot(passageMapT0)
+```
+
+Note that when theta is set to 0, movement probability in each cell is very low and movement is thus very diffuse. But as theta increases (below), we start to approach something similar to a least-cost corridor.
+
+
+```{r}
+
+
+#Alter theta to converge on a lcp
+
+passageMapT001 = passage(landCondSub, origin=st_coordinates(publicCentroids)[3,], goal = st_coordinates(publicCentroids)[5,], theta=0.001)
+
+plot(passageMapT001)
+```
+
+
+# Patch-based networks and graph theory
