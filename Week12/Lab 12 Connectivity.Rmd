@@ -1,6 +1,8 @@
 ---
 title: "Lab 12 - Connectivity"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r, warning=F, message=F}
@@ -11,12 +13,15 @@ require(tidyverse)
 require(terra)
 require(sf)
 require(gdistance)
+require(igraph)
+require(fitdistrplus)
+require(fdrtool)
 ```
 
 
 # Functional connectivity among Florida Panther protected areas
 
-Today we're going to be working with two different data sets. First, we'll e revisiting our panther data. This time, we'll be trying to identify connectivity and potential corridors among protected lands in south Florida. Prior work used radio telemetry data to interpret landscape resistance based on point-selection and home range selection functions (https://www.sciencedirect.com/science/article/pii/S0006320705005495).
+Today we're going to be working with two different data sets. First, we'll be revisiting our panther data. This time, we'll be trying to identify connectivity and potential corridors among protected lands in south Florida. Prior work used radio telemetry data to interpret landscape resistance based on point-selection and home range selection functions (https://www.sciencedirect.com/science/article/pii/S0006320705005495).
 
 ### Datasets
 
@@ -51,7 +56,8 @@ For mapping connectivity among these public lands, we need to identify a point i
 ```{r, warning=F}
 publicCentroids = st_centroid(public)
 
-plot(st_geometry(public))
+plot(land)
+plot(st_geometry(public), add=T)
 plot(st_geometry(publicCentroids), add=T, col='red')
 ```
 
@@ -63,7 +69,8 @@ landCost = classify(land, classification[,c(1,3)])
 landCost = raster(landCost)
 
 plot(landCost)
-
+plot(st_geometry(public), add=T)
+plot(st_geometry(publicCentroids), add=T, col='red')
 ```
 
 # Effective distances
@@ -93,22 +100,24 @@ Now we can calculate the actual least-cost distance using Dijkstra's algorithm.
 
 #Least-cost distance
 lcDist = costDistance(landCond, st_coordinates(publicCentroids))
-
+lcDist
 ```
 
-Now we will calculate an effective distance based on circuit theory. We assume random walks, acknowledging that different paths are possible. The commute distance function quantifies the expected time for an individual to move from one point to another and back again.
+Now we will calculate an effective distance based on circuit theory. We assume random walks, acknowledging that different paths are possible. The commute distance function quantifies the expected time for an individual to move from one point to another in number of steps.
 
 
 ```{r}
 #Commute distance
 circuitDist = commuteDistance(landCond, st_coordinates(publicCentroids))
+circuitDist
 ```
 
 We could also calculate a randomized shortest path. Recall, that here we have a parameter theta that we can tweak. If theta = 0, our analysis is analogous to a circuit theory approach and as theta increases, we approach a least-cost path. In this case, the rSPDistance() function takes an unfortunately long time, so we are going to subset to just the first two points for this exercise in class.
 
 ```{r}
 #Randomized shortest path distance
-rspDistT001 = rSPDistance(landCond, from=st_coordinates(publicCentroids)[1,], to=st_coordinates(publicCentroids)[2,], theta=0.001)
+rspDist1.2 = rSPDistance(landCond, from=st_coordinates(publicCentroids)[1,], to=st_coordinates(publicCentroids)[2,], theta=0.001)
+rspDist1.2
 ```
 
 
@@ -181,33 +190,8 @@ points(publicCentroids, col='grey30')
 lines(fpwrOssfLcp, col='red')
 ```
 
-Now that we have these spatially explicit objects, we can use them to extract information for these paths or corridors for conservation planning purposes. First we'll do that for the single path we created.
+Now that we have these spatially explicit objects, we can use them to extract information for these paths or corridors for conservation planning purposes. You'll be doing this for one of the challenges in your lab.
 
-```{r}
-# Extract landcover pixels for the least-cost path we created
-lcpLand = terra::extract(land, st_as_sf(fpwrOssfLcp)) %>% 
-  setNames(c('id', 'hab')) %>% 
-  group_by(hab) %>% 
-  summarise(n())
-
-lcpLand
-```
-
-And then for our corridor.
-
-```{r}
-# Here we use our corridor as a mask for the landcover raster
-corridorLand = crop(land, leastCostCorridor10)
-corridorLand = mask(raster(corridorLand), leastCostCorridor10)
-
-# We can plot the landcover types in our 10% corridor
-plot(corridorLand, axes=F, legend=F)
-
-# Or simply summarize them
-table(as.vector(corridorLand))
-```
-
-Note that across both files, the values of 17 (cypress swamp), 9 (pinelands), and 12 (freshwater marsh) generally show up as the most common.
 
 
 # Randomized shortest path (flow mapping)
@@ -222,18 +206,213 @@ passageMapT0 = passage(landCondSub, origin = st_coordinates(publicCentroids)[3,]
 plot(passageMapT0)
 ```
 
-Note that when theta is set to 0, movement probability in each cell is very low and movement is thus very diffuse. But as theta increases (below), we start to approach something similar to a least-cost corridor.
+Note that when theta is set to 0, movement probability in each cell is very low and movement is thus very diffuse. Thus we are developing a circuit-theory based solution to our assessment of movement. Theta is the degree from which the path randomly deviates from the shortest path.
+
+
+
+# Patch-based networks and graph theory
+
+Now we're going to switch gears and demonstrate the use of patch-based graphs or networks to evaluate connectivity. Importantly, we're going to be working with a completely different dataset and comparing potential vs. realized connectivity among 29 sites for the endangered Snail Kite. First we're going to bring in a node-specific data frame that has name, coordinate, and area information for the 29 sites.
+
+We're going to bring in two datasets. 
+
+```{r}
+
+nodes = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week12/kite_nodes.csv')
+area = nodes$area
+nodes
+```
+
+Next we will bring in a matrix showing within-breeding-season dispersal. The values in the matrix represent the observed number of Snail Kites that moved between each combination of sites. Note that this is not a symmetric matrix, meaning that we have bi-directional information.
+
+```{r}
+aObs = read.csv('https://raw.githubusercontent.com/ValenteJJ/SpatialEcology/main/Week12/kite_movement.csv')[,-1]
+diag(aObs) = 0
+aObs
+```
+
+Now we can create a distance matrix quantifying how far apart the sites are from one another in km.
+
+```{r}
+coords = cbind(nodes$XCoord, nodes$YCoord)
+distMat = pointDistance(coords, lonlat=F)
+distMat = distMat / 1000 # in km
+distMat
+```
+
+### Dispersal Kernels
+
+Dispersal kernels quantify the dispersal probability as a function of distance from some original location (e.g., natal site or breeding site). Here we are creating dispersal kernels based on within-season movements. What this means is that we are trying to fit a model that represents the distribution of dispersal distances. So we need to pull together the non-zero movement distances and plot them.
 
 
 ```{r}
 
+linkLoc = which(aObs > 0, arr.ind=T)
+withinDisp = cbind(distMat[linkLoc], aObs[linkLoc])
 
-#Alter theta to converge on a lcp
+#Creating one distance observation for each individual
+withinDisp = rep(withinDisp[,1], withinDisp[,2])
 
-passageMapT001 = passage(landCondSub, origin=st_coordinates(publicCentroids)[3,], goal = st_coordinates(publicCentroids)[5,], theta=0.001)
+hist(withinDisp)
+```
 
-plot(passageMapT001)
+Now we can fit 4 different models that could potentially represent this observed distribution. We will focus on the log-normal distribution, exponential, Weibull, and halfnormal.
+
+```{r, warning=F}
+
+dispLnorm = fitdist(data = withinDisp, distr='lnorm', method='mle')
+dispExp = fitdist(data = withinDisp, distr='exp', method='mle')
+dispWeib = fitdist(data=withinDisp, distr='weibull', method='mle')
+disp1dt = fitdist(data=withinDisp, distr='halfnorm', start=list(theta=0.01), method='mle')
+
+dispAic = gofstat(list(dispExp, dispLnorm, dispWeib, disp1dt), fitnames=c('exponential', 'lognormal', 'Weibull', '1Dt'))
+dispAic$aic
+```
+
+It looks like the Weibull distribution fits best, based on AIC. Nonetheless, we're going to use the exponential distribution given it is commonly used in metapopulation ecology and landscape connectivity research. This requires only one parameter, alpha, which describes the inverse of the mean dispersal distance for a species, and this information is relatively frequently available.
+
+```{r}
+plot(dispExp)
+```
+
+### Creating a network or graph
+
+Given our chosen dispersal kernel, we can now create graphs based on different transition matrices. Note that we already have one directed, weighted network in aObs.
+
+```{r}
+aObs
+```
+
+We can also create an undirected, unweighted network based on the mean dispersal distance. Here we are simply assuming that if two sites are closer together than the mean dispersal distance for the Kites, they are connected, and otherwise they are not.
+
+```{r}
+
+# Calculate mean dispersal distance
+aMeanDist = mean(withinDisp)
+aMeanDist
+
+# Create the transition matrix
+aMean = matrix(0, nrow=nrow(aObs), ncol=ncol(aObs))
+aMean[distMat < aMeanDist] = 1
+diag(aMean) = 0
+aMean
+```
+
+Lastly, we will try creating an undirected, weighted network where the weights are based on the exponential distribution. Here we are going to use our mean dispersal distance as our estimate for alpha.
+
+
+```{r}
+aProb = matrix(0, nrow=nrow(aObs), ncol=ncol(aObs))
+alpha = 1/aMeanDist
+
+# Calculate weights in the distance matrix
+aProb = exp(-alpha*distMat)
+diag(aProb)=0
+aProb
+```
+
+Now we create igraph objects based on each matrix.
+
+```{r}
+graphAmean = graph_from_adjacency_matrix(aMean, mode='undirected')
+graphAprob = graph_from_adjacency_matrix(aProb, mode='undirected', weighted=T)
+graphAobs = graph_from_adjacency_matrix(as.matrix(aObs), mode='directed', weighted=T)
 ```
 
 
-# Patch-based networks and graph theory
+Now that we have created this igraph structure, we can pull out lots of information about the network structure.
+
+```{r}
+plot(graphAmean, layout=coords, vertex.label=NA)
+plot(graphAprob, layout=coords, edge.width=E(graphAprob)$weight, vertex.label=NA)
+plot(graphAobs, layout=coords, vertex.label=NA)
+```
+
+
+### Patch-scale connectivity
+
+Node- or patch-level connectivity measures are often called (in network speak) "centrality" measures. We can also break such metrics down into "radial" or "medial" measures. Radial measures focus on quantifying flow that starts or terminates from a given patch. Common radial measures include degree (sum of number of links);
+
+```{r}
+aMeanDegree = degree(graphAmean)
+aMeanDegree
+```
+
+strength (sum of weights of links to/from patch);
+
+```{r}
+aMeanStrength = strength(graphAmean)
+aMeanStrength
+```
+
+
+eigenvector centrality (relative number of indirect links through neighbors);
+
+```{r}
+aMeanEigen = eigen_centrality(graphAmean)
+aMeanEigen$vector
+```
+
+and closeness centrality (inverse of the average shortest-path distance from patch to all other connected patches).
+
+```{r}
+aMeanClose = closeness(graphAmean)
+aMeanClose
+```
+
+
+
+Medial measures quantify the number of paths that flow through a patch. The most common one is betweenness centrality which quantifies the number of shortest paths between all patches in the network that go through a particular patch.
+
+```{r}
+aProbBetween = betweenness(graphAprob, weights=1/E(graphAprob)$weight)
+aProbBetween
+```
+
+
+### Landscape-scale connectivity
+
+Landscape connectivity metrics are used for quantifying connectivity across the entire network. Here we will focus on four landscape metrics. The first is connectance which is a simple measure for unweighted graphs. It is the number of observed links over the total number of possible links.
+
+```{r}
+connectance = edge_density(graphAmean)
+connectance
+```
+
+Next we will look at the integral index of connectivity which is also based on a binary network. Values range from 0 (no habitat) to 1 (entire landscape is habitat), and the value declines with loss of each patch or loss of non-redundant links.
+
+```{r}
+
+AL = 63990 # Approximate study area in km^2
+
+#Create a matrix of shortet paths
+nlMat = distances(graphAmean)
+
+#In cases where you have isolated patches, we assign an arbitrarily large value
+nlMat [is.infinite(nlMat)] = 1000
+
+iicMat = outer(area, area)/(1+nlMat)
+iic = sum(iicMat)/AL^2
+iic
+```
+
+
+Lastly, we'll look at probability of connectivity which is one of the most frequently used metrics. This metric is used to describe the probability that two random points in a landscape are reachable from each other given a set of habitat patches and links among them.
+
+
+```{r}
+pStarMat = distances(graphAprob, weights=E(graphAprob)$weight)
+
+# Back-transform to probabilities
+pStarMat = exp(-pStarMat)
+
+# Numerator of PC
+pcNum = outer(area, area)*pStarMat
+
+# Probability of connectivity
+pc = sum(pcNum)/AL^2
+pc
+```
+
+
+
