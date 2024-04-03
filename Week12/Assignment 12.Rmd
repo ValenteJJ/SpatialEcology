@@ -1,0 +1,52 @@
+---
+title: "Assignment 12 - Connectivity"
+output: html_notebook
+---
+
+
+```{r}
+#Don't forget to load your packages!
+```
+
+
+# Challenge 1 (5 points)
+
+In the lab, we calculated Euclidean distance, least-cost distance, commute distance (based on circuit theory), and a randomized shortest path distance. Examine the correlation among these 4 metrics of effective distance. Which tend to be the longest, which tend to be the shortest, and why? In what situations might you expect to find strong differences between Euclidean distance and the other metrics of effective distance?
+
+```{r}
+#Code here
+```
+
+Answer here.
+
+# Challenge 2 (5 points)
+
+In the lab we developed a 10% least-cost corridor between two protected areas. Identify what proportion of this corridor is comprised of each landcover type based on the land raster. To do this, make sure that both the land and leastCostCorridor10 rasters are spatRasters. Then mask land with leastCostCorridor10. The values in the resulting raster will be representative of the landcover values in the corridor. Summarise this information and refer back to the classification dataframe to link the landcover numbers with landcover types. What are the three most common landcover types within this corridor, and does this make sense given what you know about the resistance to movement within such landcover types?
+
+```{r}
+#Code here
+```
+
+Answer here.
+
+
+# Challenge 3 (5 points)
+
+In the lab, we used the passage() function to conduct a randomized shortest path analysis mapping connectivity among two protected areas. We initially set theta to 0 thus resulting in a circuit theory based map of connectivity. Using the same passage() function, conduct the analysis again using values of theta = 0.0001 and theta = 0.001. Plot the resulting maps. What patterns do you see emerge as theta increases? Comment on the tradeoffs between biological realism and ease of conservation planning based on these three different maps of connectivity.
+
+```{r}
+#Code here
+```
+
+Answer here.
+
+
+# Challenge 4 (5 points)
+
+In the latter part of the lab, we discussed calculating patch-based and landscape-based metrics of connectivity. Patch number 6 had the lowest degree (n = 2) while patch number 7 had one of the highest degrees (n = 12). First delete patch number 6 from the network, and then examine the impacts on the landscape level metrics integral index of connectivity (ICC) and probability of connectivity (PC). Now replace patch 6 back into the network and instead delete patch number 7. Again, examine how ICC and PC change. How does the loss of patch 6 compare to the loss of patch 7 in terms of its impacts on landscape-level connectivity?
+
+```{r}
+#Code here
+```
+
+Answer here.

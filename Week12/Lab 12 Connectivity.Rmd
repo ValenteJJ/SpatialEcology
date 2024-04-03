@@ -82,6 +82,7 @@ There are several ways to calculate "distances" between protected areas, and we 
 
 geoDist = pointDistance(publicCentroids, lonlat=F)
 geoDist = as.dist(geoDist)
+geoDist
 ```
 
 Next we will consider the least-cost distance which is the shortest distance between two points based on sum of costs. We can quantify this either in terms of least-cost distance (cumulative cost of the path) or least-cost path length (actual length of the path that has the least cost). Before we can calculate this, however, we need to use the gdistance package to create a transition layer. This converts the raster cells into a sparse network of connections based on the mean conductance value (1/resistance) between pairs of cells
@@ -341,7 +342,7 @@ aMeanDegree
 strength (sum of weights of links to/from patch);
 
 ```{r}
-aMeanStrength = strength(graphAmean)
+aMeanStrength = strength(graphAprob)
 aMeanStrength
 ```
 
