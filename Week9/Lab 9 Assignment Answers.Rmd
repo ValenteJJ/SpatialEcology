@@ -163,8 +163,13 @@ In the lab, we fit 6 SDMs. We then calculated discrimination statistics for all 
 
 ```{r}
 # Create a new dataframe to store the discrimination statistics
-tmp = valCovs %>% mutate(VATH = vathVal$VATH)
-tmp = tmp[complete.cases(tmp),]
+
+
+
+tmp = valCovs 
+
+# %>% mutate(VATH = vathVal$VATH)
+# tmp = tmp[complete.cases(tmp),]
 
 
 # Compute validation statistics for various models
@@ -267,8 +272,8 @@ Is this ensemble model an improvement over one of the models you built previousl
 
 
 ```{r}
-valSpatial = valCovs %>% mutate(VATH = vathVal$VATH)
-valSpatial = valSpatial[complete.cases(valSpatial),]
+valSpatial = valCovs
+# valSpatial = valSpatial[complete.cases(valSpatial),]
 valSpatial = st_as_sf(valSpatial, coords=c('EASTING', 'NORTHING'))
 
 
@@ -277,6 +282,7 @@ colnames(ensembleVal) = c('ensembleVal')
 
 valData2 = cbind(valData,ensembleVal)
 
+summaryEval2 = data.frame(matrix(nrow=0, ncol=9))
 nModels = ncol(valData2)-2
 
 for(i in 1:nModels){
@@ -327,18 +333,6 @@ Fit a GLM using the presence-background data as we did in the lab (i.e., use the
 
 
 ```{r}
-# glmPresBack = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=presBackCovs)
-# 
-# glmPresAbs = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=presAbsCovs)
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-
-
 
 
 glmPBmodel = glm(pres ~ canopy + elev + I(elev^2) + mesic1km + precip, family='binomial', data=presBackCovs)
@@ -395,8 +389,7 @@ summaryEval3
 
 Now calculate the same statistics (AUC, Kappa, and TSS) for each model you developed above using K-fold validation with 5 groups. Do these models perform better or worse based on K-fold validation (when compared with the validation metrics you calculated on a novel dataset in Challenge 2)? Why might that occur?
 
-```{r}
-# set.seed(1000)
+```{r, warning=F}
 
 nFolds = 5
 kfoldPA = kfold(presAbsCovs, k=nFolds)
