@@ -104,8 +104,8 @@ colnames(absCovs)[1:2] = c('x', 'y')
 presBackCovs = rbind(presCovs, backCovs)
 presAbsCovs = rbind(presCovs, absCovs)
 
-valCovs = valCovs %>% mutate(VATH = vathVal$VATH)
-valCovs = valCovs[complete.cases(valCovs),]
+# valCovs = valCovs %>% mutate(VATH = vathVal$VATH)
+# valCovs = valCovs[complete.cases(valCovs),]
 
 
 # Fitting bioclim envelope model
