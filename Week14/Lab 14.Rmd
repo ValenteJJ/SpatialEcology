@@ -1,0 +1,125 @@
+---
+title: "Lab 14"
+output: html_notebook
+---
+
+
+```{r}
+rm(list=ls())
+library(ctmm)
+```
+
+# Background
+
+I just put this together quickly, but the goal here is to use the ctmm package to fit some continuous time movement models and just give you a sense of how it works and what kinds of inference can be drawn.
+
+# Look at the data
+
+```{r}
+#Load buffalo dataset from CTMM
+data(buffalo)
+projection(buffalo) = median(buffalo)
+
+#This is a list of buffalo telemetry objects
+class(buffalo)
+class(buffalo[[1]])
+
+#6 buffalo
+length(buffalo)
+
+#Names of the buffalo
+names(buffalo)
+
+#Look at the data for one of them
+buffalo[[1]]
+
+#Summary information for each one
+summary(buffalo)
+
+#Plot them
+plot(buffalo, col=rainbow(length(buffalo)))
+compass()
+```
+
+# Variogram
+
+```{r}
+
+#Pull out a single buffalo
+data = buffalo$Cilla
+
+#Plot the locations as a function of time
+plot(data, col=color(data, by='time'))
+
+#Look at variogram
+svf = variogram(data)
+plot(svf)
+
+```
+
+```{r}
+#Guess starting points for parameters that can be fit to variogram
+guess = ctmm.guess(data, interactive=F)
+guess
+
+fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)
+```
+
+
+
+
+```{r}
+# rm(list=ls())
+# load()
+
+summary(fits)
+```
+```{r}
+#Add in iid models
+fits[['IID anisotropic']] = ctmm.fit(data)
+fits[['IID']] = ctmm.fit(data, ctmm(isotropic=T))
+
+summary(fits)
+```
+
+
+```{r}
+#Looking at IID anisotropic model
+summary(fits[[5]])
+plot(data, fits[[5]])
+
+#And the variogram
+zoom(svf, fits[[5]])
+
+#The residuals have structure
+res = residuals(data, fits[[5]])
+plot(res)
+
+#Correlogram from residuals
+acf = correlogram(res, res=10)
+zoom(acf)
+
+#This model does not explain the autocorrelation in the data
+```
+
+Now the best model
+```{r}
+
+summary(fits[[1]])
+plot(data, fits[[1]])
+
+#And the variogram
+zoom(svf, fits[[1]])
+
+#The residuals have structure
+res = residuals(data, fits[[1]])
+plot(res)
+
+#Correlogram from residuals
+acf = correlogram(res, res=10)
+zoom(acf)
+
+#This model does not explain the autocorrelation in the data
+
+```
+
