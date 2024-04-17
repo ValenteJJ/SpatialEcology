@@ -1860,17 +1860,23 @@ plot(svf)
 <!-- rnb-plot-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
+</div>
+<div id="fitting-continuous-time-models" class="section level1">
+<h1>Fitting continuous time models</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI0d1ZXNzIHN0YXJ0aW5nIHBvaW50cyBmb3IgcGFyYW1ldGVycyB0aGF0IGNhbiBiZSBmaXQgdG8gdmFyaW9ncmFtXG5ndWVzcyA9IGN0bW0uZ3Vlc3MoZGF0YSwgaW50ZXJhY3RpdmU9Rilcbmd1ZXNzXG5cbmZpdHMgPSBjdG1tLnNlbGVjdChkYXRhLCBndWVzcywgdHJhY2U9MywgdmVyYm9zZT1ULCBjb3Jlcz0tMSlcbmBgYCJ9 -->
-<pre class="r"><code>#Guess starting points for parameters that can be fit to variogram
-guess = ctmm.guess(data, interactive=F)
-guess
-
-fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubG9hZCgnaHR0cHM6Ly9naXRodWIuY29tL1ZhbGVudGVKSi9TcGF0aWFsRWNvbG9neS9yYXcvbWFpbi9XZWVrMTQvRml0dGVkTW9kZWxzLlJEYXRhJylcblxuYGBgIn0= -->
+<pre class="r"><code>load(&#39;https://github.com/ValenteJJ/SpatialEcology/raw/main/Week14/FittedModels.RData&#39;)
+</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZzogY2Fubm90IG9wZW4gY29tcHJlc3NlZCBmaWxlICdodHRwczovL2dpdGh1Yi5jb20vVmFsZW50ZUpKL1NwYXRpYWxFY29sb2d5L3Jhdy9tYWluL1dlZWsxNC9GaXR0ZWRNb2RlbHMuUkRhdGEnLCBwcm9iYWJsZSByZWFzb24gJ0ludmFsaWQgYXJndW1lbnQnRXJyb3IgaW4gcmVhZENoYXIoY29uLCA1TCwgdXNlQnl0ZXMgPSBUUlVFKSA6IGNhbm5vdCBvcGVuIHRoZSBjb25uZWN0aW9uXG4ifQ== -->
+<pre><code>Warning: cannot open compressed file &#39;https://github.com/ValenteJJ/SpatialEcology/raw/main/Week14/FittedModels.RData&#39;, probable reason &#39;Invalid argument&#39;Error in readChar(con, 5L, useBytes = TRUE) : cannot open the connection</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
+</div>
+<div id="looking-at-the-information-from-the-fitted-models" class="section level1">
+<h1>Looking at the information from the fitted models</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBybShsaXN0PWxzKCkpXG4jIGxvYWQoKVxuXG5zdW1tYXJ5KGZpdHMpXG5gYGAifQ== -->
@@ -1879,7 +1885,18 @@ fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)</code></pre>
 
 summary(fits)</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiICAgICAgICAgICAgICAgICAgICAgzpRBSUNjIM6UUk1TUEUgKGttKSBET0ZbYXJlYV1cbk9VRiBhbmlzb3Ryb3BpYyAgICAwLjAwMDAwICAgIDEuNzcxNjg5ICAxOC4xMzU5M1xuT1VGICAgICAgICAgICAgICAgNjMuMDE5MTUgICAgMS45MDIwMzEgIDE3LjkxOTE0XG5PVSBhbmlzb3Ryb3BpYyAgMTU2NS4yOTE0NyAgICAyLjE5NTkzNSAgIDguMjMxNzhcbk9VZiBhbmlzb3Ryb3BpYyAxODYzLjg4MDAzICAgIDAuMDAwMDAwIDM0NS45MTk2MVxuIn0= -->
+<pre><code>                     ΔAICc ΔRMSPE (km) DOF[area]
+OUF anisotropic    0.00000    1.771689  18.13593
+OUF               63.01915    1.902031  17.91914
+OU anisotropic  1565.29147    2.195935   8.23178
+OUf anisotropic 1863.88003    0.000000 345.91961</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>The algorithm didn’t fit the basic model that assumed independence
+among points, so let’s do that anyways.</p>
+<!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI0FkZCBpbiBpaWQgbW9kZWxzXG5maXRzW1snSUlEIGFuaXNvdHJvcGljJ11dID0gY3RtbS5maXQoZGF0YSlcbmZpdHNbWydJSUQnXV0gPSBjdG1tLmZpdChkYXRhLCBjdG1tKGlzb3Ryb3BpYz1UKSlcblxuc3VtbWFyeShmaXRzKVxuYGBgIn0= -->
 <pre class="r"><code>#Add in iid models
@@ -1888,8 +1905,20 @@ fits[[&#39;IID&#39;]] = ctmm.fit(data, ctmm(isotropic=T))
 
 summary(fits)</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiICAgICAgICAgICAgICAgICAgICAgIM6UQUlDYyDOlFJNU1BFIChrbSkgIERPRlthcmVhXVxuT1VGIGFuaXNvdHJvcGljICAgICAwLjAwMDAwICAgIDEuNzcxNjg5ICAgMTguMTM1OTNcbk9VRiAgICAgICAgICAgICAgICA2My4wMTkxNSAgICAxLjkwMjAzMSAgIDE3LjkxOTE0XG5PVSBhbmlzb3Ryb3BpYyAgIDE1NjUuMjkxNDcgICAgMi4xOTU5MzUgICAgOC4yMzE3OFxuT1VmIGFuaXNvdHJvcGljICAxODYzLjg4MDAzICAgIDAuMDAwMDAwICAzNDUuOTE5NjFcbklJRCBhbmlzb3Ryb3BpYyAzODExMi4xNTc1NyAgICAxLjQxNTYwMiAzNTI2LjAwMDAwXG5JSUQgICAgICAgICAgICAgMzg2ODAuMzIyMzggICAgMS40MTU2MDIgMzUyNi4wMDAwMFxuIn0= -->
+<pre><code>                      ΔAICc ΔRMSPE (km)  DOF[area]
+OUF anisotropic     0.00000    1.771689   18.13593
+OUF                63.01915    1.902031   17.91914
+OU anisotropic   1565.29147    2.195935    8.23178
+OUf anisotropic  1863.88003    0.000000  345.91961
+IID anisotropic 38112.15757    1.415602 3526.00000
+IID             38680.32238    1.415602 3526.00000</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
+</div>
+<div id="lets-examine-the-worst-model" class="section level1">
+<h1>Let’s examine the worst model</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI0xvb2tpbmcgYXQgSUlEIGFuaXNvdHJvcGljIG1vZGVsXG5zdW1tYXJ5KGZpdHNbWzVdXSlcbnBsb3QoZGF0YSwgZml0c1tbNV1dKVxuXG4jQW5kIHRoZSB2YXJpb2dyYW1cbnpvb20oc3ZmLCBmaXRzW1s1XV0pXG5cbiNUaGUgcmVzaWR1YWxzIGhhdmUgc3RydWN0dXJlXG5yZXMgPSByZXNpZHVhbHMoZGF0YSwgZml0c1tbNV1dKVxucGxvdChyZXMpXG5cbiNDb3JyZWxvZ3JhbSBmcm9tIHJlc2lkdWFsc1xuYWNmID0gY29ycmVsb2dyYW0ocmVzLCByZXM9MTApXG56b29tKGFjZilcblxuI1RoaXMgbW9kZWwgZG9lcyBub3QgZXhwbGFpbiB0aGUgYXV0b2NvcnJlbGF0aW9uIGluIHRoZSBkYXRhXG5gYGAifQ== -->
@@ -1912,7 +1941,9 @@ zoom(acf)
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
-<p>Now the best model</p>
+</div>
+<div id="now-the-best-model" class="section level1">
+<h1>Now the best model</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG5zdW1tYXJ5KGZpdHNbWzFdXSlcbnBsb3QoZGF0YSwgZml0c1tbMV1dKVxuXG4jQW5kIHRoZSB2YXJpb2dyYW1cbnpvb20oc3ZmLCBmaXRzW1sxXV0pXG5cbiNUaGUgcmVzaWR1YWxzIGhhdmUgc3RydWN0dXJlXG5yZXMgPSByZXNpZHVhbHMoZGF0YSwgZml0c1tbMV1dKVxucGxvdChyZXMpXG5cbiNDb3JyZWxvZ3JhbSBmcm9tIHJlc2lkdWFsc1xuYWNmID0gY29ycmVsb2dyYW0ocmVzLCByZXM9MTApXG56b29tKGFjZilcblxuI1RoaXMgbW9kZWwgZG9lcyBub3QgZXhwbGFpbiB0aGUgYXV0b2NvcnJlbGF0aW9uIGluIHRoZSBkYXRhXG5cbmBgYCJ9 -->
@@ -1939,7 +1970,7 @@ zoom(acf)
 <!-- rnb-text-end -->
 </div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIkxhYiAxNCINCm91dHB1dDogaHRtbF9ub3RlYm9vaw0KLS0tDQoNCg0KYGBge3J9DQpybShsaXN0PWxzKCkpDQpsaWJyYXJ5KGN0bW0pDQpgYGANCg0KIyBCYWNrZ3JvdW5kDQoNCkkganVzdCBwdXQgdGhpcyB0b2dldGhlciBxdWlja2x5LCBidXQgdGhlIGdvYWwgaGVyZSBpcyB0byB1c2UgdGhlIGN0bW0gcGFja2FnZSB0byBmaXQgc29tZSBjb250aW51b3VzIHRpbWUgbW92ZW1lbnQgbW9kZWxzIGFuZCBqdXN0IGdpdmUgeW91IGEgc2Vuc2Ugb2YgaG93IGl0IHdvcmtzIGFuZCB3aGF0IGtpbmRzIG9mIGluZmVyZW5jZSBjYW4gYmUgZHJhd24uDQoNCiMgTG9vayBhdCB0aGUgZGF0YQ0KDQpgYGB7cn0NCiNMb2FkIGJ1ZmZhbG8gZGF0YXNldCBmcm9tIENUTU0NCmRhdGEoYnVmZmFsbykNCnByb2plY3Rpb24oYnVmZmFsbykgPSBtZWRpYW4oYnVmZmFsbykNCg0KI1RoaXMgaXMgYSBsaXN0IG9mIGJ1ZmZhbG8gdGVsZW1ldHJ5IG9iamVjdHMNCmNsYXNzKGJ1ZmZhbG8pDQpjbGFzcyhidWZmYWxvW1sxXV0pDQoNCiM2IGJ1ZmZhbG8NCmxlbmd0aChidWZmYWxvKQ0KDQojTmFtZXMgb2YgdGhlIGJ1ZmZhbG8NCm5hbWVzKGJ1ZmZhbG8pDQoNCiNMb29rIGF0IHRoZSBkYXRhIGZvciBvbmUgb2YgdGhlbQ0KYnVmZmFsb1tbMV1dDQoNCiNTdW1tYXJ5IGluZm9ybWF0aW9uIGZvciBlYWNoIG9uZQ0Kc3VtbWFyeShidWZmYWxvKQ0KDQojUGxvdCB0aGVtDQpwbG90KGJ1ZmZhbG8sIGNvbD1yYWluYm93KGxlbmd0aChidWZmYWxvKSkpDQpjb21wYXNzKCkNCmBgYA0KDQojIFZhcmlvZ3JhbQ0KDQpgYGB7cn0NCg0KI1B1bGwgb3V0IGEgc2luZ2xlIGJ1ZmZhbG8NCmRhdGEgPSBidWZmYWxvJENpbGxhDQoNCiNQbG90IHRoZSBsb2NhdGlvbnMgYXMgYSBmdW5jdGlvbiBvZiB0aW1lDQpwbG90KGRhdGEsIGNvbD1jb2xvcihkYXRhLCBieT0ndGltZScpKQ0KDQojTG9vayBhdCB2YXJpb2dyYW0NCnN2ZiA9IHZhcmlvZ3JhbShkYXRhKQ0KcGxvdChzdmYpDQoNCmBgYA0KDQpgYGB7cn0NCiNHdWVzcyBzdGFydGluZyBwb2ludHMgZm9yIHBhcmFtZXRlcnMgdGhhdCBjYW4gYmUgZml0IHRvIHZhcmlvZ3JhbQ0KZ3Vlc3MgPSBjdG1tLmd1ZXNzKGRhdGEsIGludGVyYWN0aXZlPUYpDQpndWVzcw0KDQpmaXRzID0gY3RtbS5zZWxlY3QoZGF0YSwgZ3Vlc3MsIHRyYWNlPTMsIHZlcmJvc2U9VCwgY29yZXM9LTEpDQpgYGANCg0KDQoNCg0KYGBge3J9DQojIHJtKGxpc3Q9bHMoKSkNCiMgbG9hZCgpDQoNCnN1bW1hcnkoZml0cykNCmBgYA0KYGBge3J9DQojQWRkIGluIGlpZCBtb2RlbHMNCmZpdHNbWydJSUQgYW5pc290cm9waWMnXV0gPSBjdG1tLmZpdChkYXRhKQ0KZml0c1tbJ0lJRCddXSA9IGN0bW0uZml0KGRhdGEsIGN0bW0oaXNvdHJvcGljPVQpKQ0KDQpzdW1tYXJ5KGZpdHMpDQpgYGANCg0KDQpgYGB7cn0NCiNMb29raW5nIGF0IElJRCBhbmlzb3Ryb3BpYyBtb2RlbA0Kc3VtbWFyeShmaXRzW1s1XV0pDQpwbG90KGRhdGEsIGZpdHNbWzVdXSkNCg0KI0FuZCB0aGUgdmFyaW9ncmFtDQp6b29tKHN2ZiwgZml0c1tbNV1dKQ0KDQojVGhlIHJlc2lkdWFscyBoYXZlIHN0cnVjdHVyZQ0KcmVzID0gcmVzaWR1YWxzKGRhdGEsIGZpdHNbWzVdXSkNCnBsb3QocmVzKQ0KDQojQ29ycmVsb2dyYW0gZnJvbSByZXNpZHVhbHMNCmFjZiA9IGNvcnJlbG9ncmFtKHJlcywgcmVzPTEwKQ0Kem9vbShhY2YpDQoNCiNUaGlzIG1vZGVsIGRvZXMgbm90IGV4cGxhaW4gdGhlIGF1dG9jb3JyZWxhdGlvbiBpbiB0aGUgZGF0YQ0KYGBgDQoNCk5vdyB0aGUgYmVzdCBtb2RlbA0KYGBge3J9DQoNCnN1bW1hcnkoZml0c1tbMV1dKQ0KcGxvdChkYXRhLCBmaXRzW1sxXV0pDQoNCiNBbmQgdGhlIHZhcmlvZ3JhbQ0Kem9vbShzdmYsIGZpdHNbWzFdXSkNCg0KI1RoZSByZXNpZHVhbHMgaGF2ZSBzdHJ1Y3R1cmUNCnJlcyA9IHJlc2lkdWFscyhkYXRhLCBmaXRzW1sxXV0pDQpwbG90KHJlcykNCg0KI0NvcnJlbG9ncmFtIGZyb20gcmVzaWR1YWxzDQphY2YgPSBjb3JyZWxvZ3JhbShyZXMsIHJlcz0xMCkNCnpvb20oYWNmKQ0KDQojVGhpcyBtb2RlbCBkb2VzIG5vdCBleHBsYWluIHRoZSBhdXRvY29ycmVsYXRpb24gaW4gdGhlIGRhdGENCg0KYGBgDQoNCg==</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIkxhYiAxNCINCm91dHB1dDogaHRtbF9ub3RlYm9vaw0KLS0tDQoNCg0KYGBge3J9DQpybShsaXN0PWxzKCkpDQpsaWJyYXJ5KGN0bW0pDQpgYGANCg0KIyBCYWNrZ3JvdW5kDQoNCkkganVzdCBwdXQgdGhpcyB0b2dldGhlciBxdWlja2x5LCBidXQgdGhlIGdvYWwgaGVyZSBpcyB0byB1c2UgdGhlIGN0bW0gcGFja2FnZSB0byBmaXQgc29tZSBjb250aW51b3VzIHRpbWUgbW92ZW1lbnQgbW9kZWxzIGFuZCBqdXN0IGdpdmUgeW91IGEgc2Vuc2Ugb2YgaG93IGl0IHdvcmtzIGFuZCB3aGF0IGtpbmRzIG9mIGluZmVyZW5jZSBjYW4gYmUgZHJhd24uDQoNCiMgTG9vayBhdCB0aGUgZGF0YQ0KDQpgYGB7cn0NCiNMb2FkIGJ1ZmZhbG8gZGF0YXNldCBmcm9tIENUTU0NCmRhdGEoYnVmZmFsbykNCnByb2plY3Rpb24oYnVmZmFsbykgPSBtZWRpYW4oYnVmZmFsbykNCg0KI1RoaXMgaXMgYSBsaXN0IG9mIGJ1ZmZhbG8gdGVsZW1ldHJ5IG9iamVjdHMNCmNsYXNzKGJ1ZmZhbG8pDQpjbGFzcyhidWZmYWxvW1sxXV0pDQoNCiM2IGJ1ZmZhbG8NCmxlbmd0aChidWZmYWxvKQ0KDQojTmFtZXMgb2YgdGhlIGJ1ZmZhbG8NCm5hbWVzKGJ1ZmZhbG8pDQoNCiNMb29rIGF0IHRoZSBkYXRhIGZvciBvbmUgb2YgdGhlbQ0KYnVmZmFsb1tbMV1dDQoNCiNTdW1tYXJ5IGluZm9ybWF0aW9uIGZvciBlYWNoIG9uZQ0Kc3VtbWFyeShidWZmYWxvKQ0KDQojUGxvdCB0aGVtDQpwbG90KGJ1ZmZhbG8sIGNvbD1yYWluYm93KGxlbmd0aChidWZmYWxvKSkpDQpjb21wYXNzKCkNCmBgYA0KDQojIFZhcmlvZ3JhbQ0KDQpgYGB7cn0NCg0KI1B1bGwgb3V0IGEgc2luZ2xlIGJ1ZmZhbG8NCmRhdGEgPSBidWZmYWxvJENpbGxhDQoNCiNQbG90IHRoZSBsb2NhdGlvbnMgYXMgYSBmdW5jdGlvbiBvZiB0aW1lDQpwbG90KGRhdGEsIGNvbD1jb2xvcihkYXRhLCBieT0ndGltZScpKQ0KDQojTG9vayBhdCB2YXJpb2dyYW0NCnN2ZiA9IHZhcmlvZ3JhbShkYXRhKQ0KcGxvdChzdmYpDQoNCmBgYA0KDQojIEZpdHRpbmcgY29udGludW91cyB0aW1lIG1vZGVscw0KDQpgYGB7cn0NCiNPbmx5IHJ1biB0aGlzIHRvcCBwYXJ0IGlmIHlvdSB3YW50IHRvIGZpdCBtb2RlbHMgZnJvbSBzY3JhdGNoIGFuZCB3YWl0IGEgd2hpbGUuDQoNCiNHdWVzcyBzdGFydGluZyBwb2ludHMgZm9yIHBhcmFtZXRlcnMgdGhhdCBjYW4gYmUgZml0IHRvIHZhcmlvZ3JhbQ0KIyBndWVzcyA9IGN0bW0uZ3Vlc3MoZGF0YSwgaW50ZXJhY3RpdmU9RikNCiMgZ3Vlc3MNCiMgDQojIGZpdHMgPSBjdG1tLnNlbGVjdChkYXRhLCBndWVzcywgdHJhY2U9MywgdmVyYm9zZT1ULCBjb3Jlcz0tMSkNCg0KDQpybShsaXN0PWxzKCkpDQpsb2FkKHVybCgnaHR0cHM6Ly9naXRodWIuY29tL1ZhbGVudGVKSi9TcGF0aWFsRWNvbG9neS9yYXcvbWFpbi9XZWVrMTQvRml0dGVkTW9kZWxzLlJEYXRhJykpDQpgYGANCg0KDQojIExvb2tpbmcgYXQgdGhlIGluZm9ybWF0aW9uIGZyb20gdGhlIGZpdHRlZCBtb2RlbHMNCg0KYGBge3J9DQojIHJtKGxpc3Q9bHMoKSkNCiMgbG9hZCgpDQoNCnN1bW1hcnkoZml0cykNCmBgYA0KDQpUaGUgYWxnb3JpdGhtIGRpZG4ndCBmaXQgdGhlIGJhc2ljIG1vZGVsIHRoYXQgYXNzdW1lZCBpbmRlcGVuZGVuY2UgYW1vbmcgcG9pbnRzLCBzbyBsZXQncyBkbyB0aGF0IGFueXdheXMuDQoNCmBgYHtyfQ0KI0FkZCBpbiBpaWQgbW9kZWxzDQpmaXRzW1snSUlEIGFuaXNvdHJvcGljJ11dID0gY3RtbS5maXQoZGF0YSkNCmZpdHNbWydJSUQnXV0gPSBjdG1tLmZpdChkYXRhLCBjdG1tKGlzb3Ryb3BpYz1UKSkNCg0Kc3VtbWFyeShmaXRzKQ0KYGBgDQoNCiMgTGV0J3MgZXhhbWluZSB0aGUgd29yc3QgbW9kZWwNCg0KYGBge3J9DQojTG9va2luZyBhdCBJSUQgYW5pc290cm9waWMgbW9kZWwNCnN1bW1hcnkoZml0c1tbNV1dKQ0KcGxvdChkYXRhLCBmaXRzW1s1XV0pDQoNCiNBbmQgdGhlIHZhcmlvZ3JhbQ0Kem9vbShzdmYsIGZpdHNbWzVdXSkNCg0KI1RoZSByZXNpZHVhbHMgaGF2ZSBzdHJ1Y3R1cmUNCnJlcyA9IHJlc2lkdWFscyhkYXRhLCBmaXRzW1s1XV0pDQpwbG90KHJlcykNCg0KI0NvcnJlbG9ncmFtIGZyb20gcmVzaWR1YWxzDQphY2YgPSBjb3JyZWxvZ3JhbShyZXMsIHJlcz0xMCkNCnpvb20oYWNmKQ0KDQojVGhpcyBtb2RlbCBkb2VzIG5vdCBleHBsYWluIHRoZSBhdXRvY29ycmVsYXRpb24gaW4gdGhlIGRhdGENCmBgYA0KDQojIE5vdyB0aGUgYmVzdCBtb2RlbA0KDQpgYGB7cn0NCg0Kc3VtbWFyeShmaXRzW1sxXV0pDQpwbG90KGRhdGEsIGZpdHNbWzFdXSkNCg0KI0FuZCB0aGUgdmFyaW9ncmFtDQp6b29tKHN2ZiwgZml0c1tbMV1dKQ0KDQojVGhlIHJlc2lkdWFscyBoYXZlIHN0cnVjdHVyZQ0KcmVzID0gcmVzaWR1YWxzKGRhdGEsIGZpdHNbWzFdXSkNCnBsb3QocmVzKQ0KDQojQ29ycmVsb2dyYW0gZnJvbSByZXNpZHVhbHMNCmFjZiA9IGNvcnJlbG9ncmFtKHJlcywgcmVzPTEwKQ0Kem9vbShhY2YpDQoNCiNUaGlzIG1vZGVsIGRvZXMgbm90IGV4cGxhaW4gdGhlIGF1dG9jb3JyZWxhdGlvbiBpbiB0aGUgZGF0YQ0KDQpgYGANCg0K</div>
 
 
 

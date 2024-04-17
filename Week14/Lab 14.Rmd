@@ -1,6 +1,8 @@
 ---
 title: "Lab 14"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 
@@ -57,16 +59,24 @@ plot(svf)
 
 ```
 
-```{r}
-#Guess starting points for parameters that can be fit to variogram
-guess = ctmm.guess(data, interactive=F)
-guess
+# Fitting continuous time models
 
-fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)
+```{r}
+#Only run this top part if you want to fit models from scratch and wait a while.
+
+#Guess starting points for parameters that can be fit to variogram
+# guess = ctmm.guess(data, interactive=F)
+# guess
+# 
+# fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)
+
+
+rm(list=ls())
+load(url('https://github.com/ValenteJJ/SpatialEcology/raw/main/Week14/FittedModels.RData'))
 ```
 
 
-
+# Looking at the information from the fitted models
 
 ```{r}
 # rm(list=ls())
@@ -74,6 +84,9 @@ fits = ctmm.select(data, guess, trace=3, verbose=T, cores=-1)
 
 summary(fits)
 ```
+
+The algorithm didn't fit the basic model that assumed independence among points, so let's do that anyways.
+
 ```{r}
 #Add in iid models
 fits[['IID anisotropic']] = ctmm.fit(data)
@@ -82,6 +95,7 @@ fits[['IID']] = ctmm.fit(data, ctmm(isotropic=T))
 summary(fits)
 ```
 
+# Let's examine the worst model
 
 ```{r}
 #Looking at IID anisotropic model
@@ -89,7 +103,7 @@ summary(fits[[5]])
 plot(data, fits[[5]])
 
 #And the variogram
-zoom(svf, fits[[5]])
+plot(svf, fits[[5]])
 
 #The residuals have structure
 res = residuals(data, fits[[5]])
@@ -97,19 +111,20 @@ plot(res)
 
 #Correlogram from residuals
 acf = correlogram(res, res=10)
-zoom(acf)
+plot(acf)
 
 #This model does not explain the autocorrelation in the data
 ```
 
-Now the best model
+# Now the best model
+
 ```{r}
 
 summary(fits[[1]])
 plot(data, fits[[1]])
 
 #And the variogram
-zoom(svf, fits[[1]])
+plot(svf, fits[[1]])
 
 #The residuals have structure
 res = residuals(data, fits[[1]])
@@ -117,7 +132,7 @@ plot(res)
 
 #Correlogram from residuals
 acf = correlogram(res, res=10)
-zoom(acf)
+plot(acf)
 
 #This model does not explain the autocorrelation in the data
 
